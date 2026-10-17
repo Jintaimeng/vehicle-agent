@@ -2,6 +2,7 @@
 name = "vehicle-agent"
 version = "0.1.0"
 description = "Fatigue-driving judgement MVP with LangGraph and a lightweight agent harness."
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
