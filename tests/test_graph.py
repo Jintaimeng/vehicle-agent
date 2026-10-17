@@ -1,0 +1,141 @@
+import json
+from datetime import UTC, datetime
+
+from langgraph.types import Command
+
+from vehicle_agent.config import Settings
+from vehicle_agent.domain.models import Alarm
+from vehicle_agent.graph.builder import build_graph
+from vehicle_agent.graph.checkpoint import open_checkpointer
+from vehicle_agent.harness.model import FakeModelAdapter
+from vehicle_agent.harness.runtime import Harness
+from vehicle_agent.harness.tools import build_vehicle_tools
+from vehicle_agent.repositories.memory import build_seed_repository
+
+REPORT = json.dumps(
+    {
+        "summary": "根据车速、历史报警和车辆资料完成研判。",
+        "recommendations": ["通知企业安全管理员复核"],
+    },
+    ensure_ascii=False,
+)
+
+
+def _settings(**overrides) -> Settings:
+    values = {"max_retries": 1, "checkpoint_path": "data/test-checkpoints.sqlite"}
+    values.update(overrides)
+    return Settings(**values)
+
+
+def _alarm(**overrides) -> Alarm:
+    payload = {
+        "id": "alarm_current",
+        "vehicle_id": "vehicle_002",
+        "driver_id": "driver_002",
+        "device_id": "device_002",
+        "alarm_type": "driver_fatigue",
+        "alarm_time": datetime(2026, 10, 9, 10, 30, tzinfo=UTC),
+        "longitude": 113.26,
+        "latitude": 23.12,
+        "speed_kmh": 40,
+        "raw_confidence": 0.8,
+    }
+    payload.update(overrides)
+    return Alarm(**payload)
+
+
+def _run(tmp_path, alarm: Alarm, *, content: str = REPORT, **settings):
+    harness = Harness(
+        _settings(**settings),
+        FakeModelAdapter(content),
+        build_vehicle_tools(build_seed_repository()),
+    )
+    graph = build_graph(harness, open_checkpointer(tmp_path / "checkpoints.sqlite"))
+    config = {"configurable": {"thread_id": alarm.id}}
+    graph.invoke(
+        {"task_id": alarm.id, "alarm": alarm.model_dump(mode="json"), "errors": []},
+        config,
+    )
+    return graph, graph.get_state(config).values
+
+
+def test_normal_alarm_completes_without_review(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm())
+
+    assert values["status"] == "completed"
+    assert values["result"]["risk_level"] == "medium"
+    assert values["result"]["requires_human_review"] is False
+    assert values["result"]["summary"].startswith("根据车速")
+
+
+def test_high_risk_alarm_is_scored_by_rules(tmp_path) -> None:
+    _, values = _run(
+        tmp_path,
+        _alarm(vehicle_id="vehicle_001", driver_id="driver_001", speed_kmh=85, raw_confidence=0.9),
+    )
+
+    assert values["status"] == "completed"
+    assert values["result"]["risk_level"] == "high"
+    assert values["result"]["alarm_validity"] == "likely_true"
+    assert values["result"]["requires_human_review"] is False
+    assert values["risk_score"] == 1.0
+
+
+def test_missing_vehicle_waits_for_human_review(tmp_path) -> None:
+    graph, values = _run(tmp_path, _alarm(vehicle_id="vehicle_missing"))
+
+    assert values["status"] == "awaiting_review"
+    assert values["alarm_validity"] == "unknown"
+    assert graph.get_state({"configurable": {"thread_id": "alarm_current"}}).next == ("review",)
+
+
+def test_tool_failure_stops_the_workflow(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm(vehicle_id="vehicle_error"))
+
+    assert values["status"] == "failed"
+    assert values["errors"][-1]["code"] == "tool_failed"
+    assert "result" not in values
+
+
+def test_invalid_model_output_is_recorded(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm(), content="not-json")
+
+    assert values["status"] == "failed"
+    assert values["errors"][-1]["code"] == "output_invalid"
+
+
+def test_model_budget_exhaustion_is_recorded(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm(), max_model_calls=0)
+
+    assert values["status"] == "failed"
+    assert values["errors"][-1]["code"] == "budget_exceeded"
+
+
+def test_checkpoint_resume_continues_after_review(tmp_path) -> None:
+    settings = _settings()
+    repository_tools = build_vehicle_tools(build_seed_repository())
+    first = Harness(settings, FakeModelAdapter(REPORT), repository_tools)
+    checkpointer = open_checkpointer(tmp_path / "checkpoints.sqlite")
+    graph = build_graph(first, checkpointer)
+    alarm = _alarm(vehicle_id="vehicle_missing")
+    config = {"configurable": {"thread_id": alarm.id}}
+    graph.invoke(
+        {"task_id": alarm.id, "alarm": alarm.model_dump(mode="json"), "errors": []},
+        config,
+    )
+
+    restored = build_graph(
+        Harness(settings, FakeModelAdapter(REPORT), build_vehicle_tools(build_seed_repository())),
+        checkpointer,
+    )
+    assert restored.get_state(config).next == ("review",)
+
+    restored.invoke(
+        Command(resume={"reviewer": "ops", "decision": "confirm", "comment": "证据不足，人工确认"}),
+        config,
+    )
+    values = restored.get_state(config).values
+
+    assert values["status"] == "completed"
+    assert values["human_review"]["decision"] == "confirm"
+    assert values["result"]["requires_human_review"] is True
