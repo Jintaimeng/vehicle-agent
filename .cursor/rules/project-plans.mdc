@@ -1,12 +1,22 @@
 ---
-description: 本仓库的实施计划统一放在项目 .cursor/plans 目录
+description: 本仓库的实施计划放在项目 .cursor/plans，并用阶段序号命名
 alwaysApply: true
 ---
 
-# 项目计划存放位置
+# 项目计划存放位置与命名
 
-在本仓库创建或更新实施计划时，把计划文件写入 `.cursor/plans/`，不要只放在用户全局 Cursor plans 目录。
+在本仓库创建或更新实施计划时，把计划文件写入 `.cursor/plans/`。Cursor 的计划工具默认写到用户全局目录 `~/.cursor/plans/`，不会自动遵守本规则。生成后立刻把内容写入本仓库 `.cursor/plans/`，并删除全局目录中的副本，避免两处并存。
 
-- 文件名使用小写短横线或下划线，后缀为 `.plan.md`。
+## 文件名
+
+文件名要能直接看出当前阶段，以及它和其他计划的先后顺序。目录按文件名排序就是执行顺序。
+
+- 格式：`NN-短横线简述.plan.md`。`NN` 为两位阶段号，从 `01` 起递增。
+- 使用小写短横线，不要用随机哈希区分计划。哈希不能表示阶段或顺序。
+- 计划正文写明上一阶段和下一阶段的文件名。
 - 计划应能作为后续扩展的依据，并与 `docs/` 中的长期方案互相引用。
-- 示例：`.cursor/plans/langgraph_harness_mvp_1bd2655d.plan.md`
+
+示例：
+
+- `.cursor/plans/01-langgraph-harness-mvp.plan.md`
+- `.cursor/plans/02-fatigue-regulation-retrieval.plan.md`

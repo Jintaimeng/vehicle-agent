@@ -19,6 +19,8 @@ isProject: true
 
 # LangGraph + 轻量 Harness MVP 计划
 
+阶段 01。下一阶段是 [.cursor/plans/02-fatigue-regulation-retrieval.plan.md](.cursor/plans/02-fatigue-regulation-retrieval.plan.md)。
+
 ## MVP 范围与验收
 
 - 聚焦一个场景：输入疲劳驾驶报警，查询车辆、驾驶员和历史报警，按确定性规则评分，再由模型生成符合 Schema 的研判报告；低置信度进入人工复核。
