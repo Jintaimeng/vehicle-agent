@@ -9,6 +9,7 @@ from vehicle_agent.graph.scoring import score_fatigue
 from vehicle_agent.graph.state import JudgementState
 from vehicle_agent.harness.errors import HarnessError
 from vehicle_agent.harness.runtime import Harness
+from vehicle_agent.knowledge.index import RegulationSnippet
 
 
 class ReportDraft(BaseModel):
@@ -67,6 +68,22 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
             return failed(state, exc.code, str(exc))
         return traced({"history": [item.model_dump(mode="json") for item in history.alarms]})
 
+    def retrieve(state: JudgementState) -> dict:
+        alarm = Alarm.model_validate(state["alarm"])
+        try:
+            found = harness.call_tool(
+                "search_regulations",
+                {"alarm_type": alarm.alarm_type},
+                task_id=state["task_id"],
+                node="retrieve",
+            )
+        except HarnessError as exc:
+            errors = [*state.get("errors", []), {"code": exc.code, "message": str(exc)}]
+            return traced({"regulations": [], "regulation_status": "degraded", "errors": errors})
+        snippets = [item.model_dump() for item in found.snippets]
+        status = "hit" if snippets else "miss"
+        return traced({"regulations": snippets, "regulation_status": status})
+
     def score(state: JudgementState) -> dict:
         alarm = Alarm.model_validate(state["alarm"])
         vehicle = None
@@ -76,12 +93,17 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
         if state.get("driver_context"):
             driver = Driver.model_validate(state["driver_context"])
         history = [Alarm.model_validate(item) for item in state.get("history", [])]
+        regulations = [
+            RegulationSnippet.model_validate(item) for item in state.get("regulations", [])
+        ]
         scored = score_fatigue(
             alarm,
             vehicle,
             driver,
             history,
             review_confidence_threshold=settings.review_confidence_threshold,
+            regulations=regulations,
+            regulation_status=state.get("regulation_status", "miss"),
         )
         status = "awaiting_review" if scored["requires_human_review"] else "ready_to_report"
         return traced({**scored, "status": status})
@@ -106,7 +128,8 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
                 "role": "system",
                 "content": (
                     "你是车辆监控研判助手。只根据给定证据编写 summary 和 recommendations。"
-                    "输出 JSON 对象，字段为 summary 和 recommendations。不要编造未提供的证据。"
+                    "输出 JSON 对象，字段为 summary 和 recommendations。"
+                    "不要编造未提供的证据。没有 document 证据时，不要引用法规条款。"
                 ),
             },
             {
@@ -118,6 +141,7 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
                         "alarm_validity": state.get("alarm_validity"),
                         "confidence": state.get("confidence"),
                         "evidence": state.get("evidence", []),
+                        "regulations": state.get("regulations", []),
                         "human_review": state.get("human_review"),
                         "prompt_version": settings.prompt_version,
                     },
@@ -151,6 +175,7 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
         "validate": validate,
         "context": load_context,
         "history": load_history,
+        "retrieve": retrieve,
         "score": score,
         "review": review,
         "report": report,

@@ -1,4 +1,11 @@
+from typing import Literal
+
 from vehicle_agent.domain.models import Alarm, AlarmValidity, Driver, Evidence, RiskLevel, Vehicle
+from vehicle_agent.knowledge.index import RegulationSnippet
+
+RegulationStatus = Literal["hit", "miss", "degraded"]
+_HIT_BONUS = 0.05
+_MISS_PENALTY = 0.2
 
 
 def score_fatigue(
@@ -8,6 +15,8 @@ def score_fatigue(
     history: list[Alarm],
     *,
     review_confidence_threshold: float,
+    regulations: list[RegulationSnippet] | None = None,
+    regulation_status: RegulationStatus = "miss",
 ) -> dict:
     """Deterministic risk score. The model is not allowed to override these fields."""
 
@@ -77,8 +86,28 @@ def score_fatigue(
             )
         )
 
+    matched = regulations or []
+    if regulation_status == "hit" and matched:
+        confidence += _HIT_BONUS
+        for item in matched:
+            evidence.append(
+                Evidence(
+                    type="document",
+                    source=item.document_id,
+                    description=f"{item.title} {item.section}：{item.excerpt}",
+                )
+            )
+    else:
+        confidence -= _MISS_PENALTY
+        missing = (
+            "法规检索不可用，缺少法规依据"
+            if regulation_status == "degraded"
+            else "缺少与该报警类型匹配的法规依据"
+        )
+        evidence.append(Evidence(type="document", source="regulations", description=missing))
+
     risk_score = min(1.0, risk_score)
-    confidence = min(0.95, confidence)
+    confidence = min(0.95, max(0.0, confidence))
     if risk_score >= 0.75:
         risk_level: RiskLevel = "high"
     elif risk_score >= 0.45:
@@ -99,6 +128,7 @@ def score_fatigue(
         "alarm_validity": alarm_validity,
         "requires_human_review": confidence < review_confidence_threshold
         or vehicle is None
-        or driver is None,
+        or driver is None
+        or regulation_status != "hit",
         "evidence": [item.model_dump() for item in evidence],
     }

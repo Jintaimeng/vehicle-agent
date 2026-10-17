@@ -44,11 +44,11 @@ def _alarm(**overrides) -> Alarm:
     return Alarm(**payload)
 
 
-def _run(tmp_path, alarm: Alarm, *, content: str = REPORT, **settings):
+def _run(tmp_path, alarm: Alarm, *, content: str = REPORT, regulations=None, **settings):
     harness = Harness(
         _settings(**settings),
         FakeModelAdapter(content),
-        build_vehicle_tools(build_seed_repository()),
+        build_vehicle_tools(build_seed_repository(), regulations),
     )
     graph = build_graph(harness, open_checkpointer(tmp_path / "checkpoints.sqlite"))
     config = {"configurable": {"thread_id": alarm.id}}
@@ -139,3 +139,59 @@ def test_checkpoint_resume_continues_after_review(tmp_path) -> None:
     assert values["status"] == "completed"
     assert values["human_review"]["decision"] == "confirm"
     assert values["result"]["requires_human_review"] is True
+
+
+class _EmptyRegulations:
+    def search(self, alarm_type: str) -> list:
+        return []
+
+
+class _FailingRegulations:
+    def search(self, alarm_type: str) -> list:
+        raise RuntimeError("regulation index unavailable")
+
+
+def test_regulation_hit_adds_document_evidence(tmp_path) -> None:
+    _, values = _run(
+        tmp_path,
+        _alarm(vehicle_id="vehicle_001", driver_id="driver_001", speed_kmh=85, raw_confidence=0.9),
+    )
+
+    documents = [item for item in values["result"]["evidence"] if item["type"] == "document"]
+    assert values["status"] == "completed"
+    assert values["regulation_status"] == "hit"
+    assert values["risk_score"] == 1.0
+    assert documents[0]["source"] == "fatigue-rules"
+    assert "第2节" in documents[0]["description"]
+
+
+def test_regulation_miss_requests_review(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm(), regulations=_EmptyRegulations())
+
+    assert values["status"] == "awaiting_review"
+    assert values["regulation_status"] == "miss"
+    assert values["requires_human_review"] is True
+    assert values["risk_level"] == "medium"
+    assert any(
+        "缺少与该报警类型匹配的法规依据" in item["description"] for item in values["evidence"]
+    )
+    assert "result" not in values
+
+
+def test_regulation_failure_degrades_to_review(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm(), regulations=_FailingRegulations())
+
+    assert values["status"] == "awaiting_review"
+    assert values["regulation_status"] == "degraded"
+    assert values["errors"][-1]["code"] == "tool_failed"
+    assert any("法规检索不可用" in item["description"] for item in values["evidence"])
+    assert "result" not in values
+
+
+def test_regulation_budget_exhaustion_degrades_to_review(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm(), max_tool_calls=2)
+
+    assert values["status"] == "awaiting_review"
+    assert values["regulation_status"] == "degraded"
+    assert values["errors"][-1]["code"] == "budget_exceeded"
+    assert "result" not in values

@@ -5,6 +5,11 @@ from typing import TypeVar
 from pydantic import BaseModel, Field
 
 from vehicle_agent.domain.models import Alarm, Driver, Vehicle
+from vehicle_agent.knowledge.index import (
+    RegulationIndex,
+    RegulationSnippet,
+    packaged_regulation_index,
+)
 from vehicle_agent.repositories.base import AlarmRepository
 
 InputT = TypeVar("InputT", bound=BaseModel)
@@ -65,7 +70,19 @@ class AlarmHistoryOutput(BaseModel):
     alarms: list[Alarm]
 
 
-def build_vehicle_tools(repository: AlarmRepository) -> ToolRegistry:
+class SearchRegulationsInput(BaseModel):
+    alarm_type: str
+
+
+class SearchRegulationsOutput(BaseModel):
+    snippets: list[RegulationSnippet]
+
+
+def build_vehicle_tools(
+    repository: AlarmRepository,
+    regulations: RegulationIndex | None = None,
+) -> ToolRegistry:
+    index = packaged_regulation_index() if regulations is None else regulations
     registry = ToolRegistry()
 
     def get_vehicle_context(payload: GetVehicleContextInput) -> VehicleContextOutput:
@@ -99,6 +116,19 @@ def build_vehicle_tools(repository: AlarmRepository) -> ToolRegistry:
             input_model=ListRecentAlarmsInput,
             output_model=AlarmHistoryOutput,
             handler=list_recent_alarms,
+        )
+    )
+
+    def search_regulations(payload: SearchRegulationsInput) -> SearchRegulationsOutput:
+        return SearchRegulationsOutput(snippets=index.search(payload.alarm_type))
+
+    registry.register(
+        RegisteredTool(
+            name="search_regulations",
+            description="按报警类型检索本地法规摘录",
+            input_model=SearchRegulationsInput,
+            output_model=SearchRegulationsOutput,
+            handler=search_regulations,
         )
     )
     return registry

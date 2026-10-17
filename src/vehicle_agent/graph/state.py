@@ -9,6 +9,8 @@ class JudgementState(TypedDict, total=False):
     vehicle_context: dict | None
     driver_context: dict | None
     history: list[dict]
+    regulations: list[dict]
+    regulation_status: Literal["hit", "miss", "degraded"]
     risk_score: float
     risk_level: RiskLevel
     alarm_validity: AlarmValidity
@@ -22,4 +24,4 @@ class JudgementState(TypedDict, total=False):
     trace: list[dict]
 
 
-Route = Literal["context", "history", "score", "review", "report", "end"]
+Route = Literal["context", "history", "retrieve", "score", "review", "report", "end"]
