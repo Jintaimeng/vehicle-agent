@@ -1,0 +1,12 @@
+---
+description: 本仓库的实施计划统一放在项目 .cursor/plans 目录
+alwaysApply: true
+---
+
+# 项目计划存放位置
+
+在本仓库创建或更新实施计划时，把计划文件写入 `.cursor/plans/`，不要只放在用户全局 Cursor plans 目录。
+
+- 文件名使用小写短横线或下划线，后缀为 `.plan.md`。
+- 计划应能作为后续扩展的依据，并与 `docs/` 中的长期方案互相引用。
+- 示例：`.cursor/plans/langgraph_harness_mvp_1bd2655d.plan.md`
