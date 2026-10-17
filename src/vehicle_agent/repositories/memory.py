@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from vehicle_agent.domain.models import Alarm, Driver, Vehicle
 
@@ -48,7 +48,7 @@ class MemoryAlarmRepository:
 
 
 def build_seed_repository() -> MemoryAlarmRepository:
-    now = datetime(2026, 10, 9, 10, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 9, 10, 30, tzinfo=UTC)
     vehicles = {
         "vehicle_001": Vehicle(
             id="vehicle_001",
