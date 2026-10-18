@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
@@ -13,6 +14,7 @@ from vehicle_agent.harness.model import ModelAdapter, OpenAICompatibleModel
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.harness.tools import build_vehicle_tools
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
+from vehicle_agent.knowledge.index import QdrantRegulationIndex, open_regulation_index
 from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.repositories.memory import build_seed_repository
 
@@ -32,13 +34,25 @@ def create_app(
     model: ModelAdapter,
     checkpointer,
     graph_index=None,
+    regulation_index=None,
 ) -> FastAPI:
     index = _graph_index(settings) if graph_index is None else graph_index
-    tools = build_vehicle_tools(repository, graph=index)
+    regulations = (
+        _regulation_index(settings) if regulation_index is None else regulation_index
+    )
+    tools = build_vehicle_tools(repository, regulations, index)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        _close_index(index)
+        _close_index(regulations)
+
     graph = build_graph(Harness(settings, model, tools), checkpointer)
-    app = FastAPI(title="Vehicle Guard AI", version="0.1.0")
+    app = FastAPI(title="Vehicle Guard AI", version="0.1.0", lifespan=lifespan)
     app.state.graph = graph
     app.state.graph_index = index
+    app.state.regulation_index = regulations
     app.state.tools = tools
 
     @app.exception_handler(HTTPException)
@@ -76,14 +90,18 @@ def create_app(
 def build_default_app() -> FastAPI:
     settings = Settings()
     index = _graph_index(settings)
+    regulations = _regulation_index(settings)
     if isinstance(index, Neo4jGraphIndex):
         index.ensure_ready()
+    if isinstance(regulations, QdrantRegulationIndex):
+        regulations.ensure_ready()
     return create_app(
         settings,
         build_seed_repository(),
         OpenAICompatibleModel(settings),
         open_checkpointer(settings.checkpoint_path),
         graph_index=index,
+        regulation_index=regulations,
     )
 
 
@@ -94,6 +112,16 @@ def _graph_index(settings: Settings):
         user=settings.neo4j_user,
         password=settings.neo4j_password,
     )
+
+
+def _regulation_index(settings: Settings):
+    return open_regulation_index(settings.regulation_backend, url=settings.qdrant_url)
+
+
+def _close_index(index) -> None:
+    close = getattr(index, "close", None)
+    if callable(close):
+        close()
 
 
 def main() -> None:

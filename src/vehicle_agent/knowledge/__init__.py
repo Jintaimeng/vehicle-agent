@@ -7,8 +7,10 @@ from vehicle_agent.knowledge.graph import (
 )
 from vehicle_agent.knowledge.index import (
     MarkdownRegulationIndex,
+    QdrantRegulationIndex,
     RegulationIndex,
     RegulationSnippet,
+    open_regulation_index,
     packaged_regulation_index,
     parse_regulation_document,
 )
@@ -19,8 +21,10 @@ __all__ = [
     "MarkdownRegulationIndex",
     "MemoryGraphIndex",
     "Neo4jGraphIndex",
+    "QdrantRegulationIndex",
     "RegulationIndex",
     "RegulationSnippet",
+    "open_regulation_index",
     "packaged_regulation_index",
     "parse_regulation_document",
     "seed_graph_index",

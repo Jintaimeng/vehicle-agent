@@ -25,3 +25,5 @@ class Settings(BaseSettings):
     neo4j_uri: str = "bolt://127.0.0.1:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "vehicle-agent-local"
+    regulation_backend: Literal["markdown", "qdrant"] = "markdown"
+    qdrant_url: str = "http://127.0.0.1:6333"

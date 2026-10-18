@@ -4,19 +4,19 @@ overview: 用 Neo4j 实现现有 GraphIndex。默认仍是内存图；切换到 
 todos:
   - id: neo4j-index
     content: 增加 Neo4jGraphIndex、固定 Cypher、幂等种子和 graph_backend 配置
-    status: pending
+    status: completed
   - id: wire-backend
     content: graph_backend=neo4j 时把 Neo4jGraphIndex 装入研判工具，并提供仅含 Neo4j 的 Compose
-    status: pending
+    status: completed
   - id: neo4j-acceptance
     content: 补齐假驱动测试与必须执行的 Neo4j 研判验收，更新 README 与阶段 03 指向
-    status: pending
+    status: completed
 isProject: true
 ---
 
 # 04 Neo4j 图谱索引
 
-上一阶段是已实现的内存图谱证据，见 [.cursor/plans/03-graph-evidence.plan.md](.cursor/plans/03-graph-evidence.plan.md)。本文件是阶段 04。下一阶段替换法规索引时使用 [.cursor/plans/05-qdrant-regulation-index.plan.md](.cursor/plans/05-qdrant-regulation-index.plan.md)，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 15.4 节：固定关系、一到两跳、固定查询模板、图谱结果变成可引用证据。Qdrant、MCP、视觉、工单和 Kafka 留到后续。
+上一阶段是已实现的内存图谱证据，见 [.cursor/plans/03-graph-evidence.plan.md](.cursor/plans/03-graph-evidence.plan.md)。本文件是阶段 04。下一阶段是 [.cursor/plans/05-qdrant-regulation-index.plan.md](.cursor/plans/05-qdrant-regulation-index.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 15.4 节：固定关系、一到两跳、固定查询模板、图谱结果变成可引用证据。MCP、视觉、工单和 Kafka 留到后续。
 
 本阶段只证明一件事：现有 `GraphIndex` 可以由 Neo4j 提供相同事实，且不改变「代码评分、模型只写总结」。
 
