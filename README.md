@@ -6,19 +6,19 @@
 
 ```text
 FastAPI
-  -> LangGraph: validate -> context -> history -> retrieve -> score -> report
-                                                                      \-> review -> report
+  -> LangGraph: validate -> context -> history -> retrieve -> graph -> score -> report
+                                                                             \-> review -> report
   -> Harness: ModelAdapter + ToolRegistry + budget + trace
-  -> 内存仓储 / 本地法规摘录 / SQLite checkpoint
+  -> 内存仓储 / 本地法规摘录 / 内存图谱关系 / SQLite checkpoint
 ```
 
 风险分数、风险等级和是否人工复核由代码规则计算。模型只根据已收集证据生成总结和处置建议。
 
 ## MVP 边界
 
-本阶段包含一条疲劳驾驶报警研判闭环、本地法规摘录检索、人工复核和检查点恢复。命中法规时证据带来源；未命中或检索失败时降低置信度并进入人工复核，研判不因此失败。
+本阶段包含一条疲劳驾驶报警研判闭环、本地法规摘录检索、本地图谱关系和人工复核、检查点恢复。法规命中时证据带来源；图谱命中时另附车辆、驾驶员和设备关系。未命中、检索失败，或法规与摄像头遮挡故障冲突时，降低置信度并进入人工复核，研判不因此失败。
 
-本阶段不包含 Kafka、Qdrant、Neo4j、YOLO、视觉大模型、MCP 和前端。法规检索走 `RegulationIndex`，当前实现读取仓库内 Markdown。工具通过 `ToolRegistry` 注册，后续可以原样封装成 MCP Server。
+本阶段不包含 Kafka、Qdrant、Neo4j、YOLO、视觉大模型、MCP 和前端。法规检索走 `RegulationIndex`，当前实现读取仓库内 Markdown。图谱查询走 `GraphIndex`，当前实现是内存中的固定关系。工具通过 `ToolRegistry` 注册，后续可以原样封装成 MCP Server。
 
 ## 环境
 

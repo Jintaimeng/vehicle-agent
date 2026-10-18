@@ -64,6 +64,13 @@ def build_seed_repository() -> MemoryAlarmRepository:
             vehicle_type="truck",
             device_id="device_002",
         ),
+        "vehicle_003": Vehicle(
+            id="vehicle_003",
+            plate_number="粤B67890",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_003",
+        ),
     }
     drivers = {
         "driver_001": Driver(
@@ -76,6 +83,12 @@ def build_seed_repository() -> MemoryAlarmRepository:
             id="driver_002",
             name="李四",
             license_type="A2",
+            enterprise_id="enterprise_001",
+        ),
+        "driver_003": Driver(
+            id="driver_003",
+            name="王五",
+            license_type="A1",
             enterprise_id="enterprise_001",
         ),
     }

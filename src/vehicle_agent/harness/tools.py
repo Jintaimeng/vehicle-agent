@@ -5,6 +5,7 @@ from typing import TypeVar
 from pydantic import BaseModel, Field
 
 from vehicle_agent.domain.models import Alarm, Driver, Vehicle
+from vehicle_agent.knowledge.graph import GraphFact, GraphIndex, seed_graph_index
 from vehicle_agent.knowledge.index import (
     RegulationIndex,
     RegulationSnippet,
@@ -78,11 +79,22 @@ class SearchRegulationsOutput(BaseModel):
     snippets: list[RegulationSnippet]
 
 
+class QueryVehicleGraphInput(BaseModel):
+    vehicle_id: str
+    device_id: str
+
+
+class QueryVehicleGraphOutput(BaseModel):
+    facts: list[GraphFact]
+
+
 def build_vehicle_tools(
     repository: AlarmRepository,
     regulations: RegulationIndex | None = None,
+    graph: GraphIndex | None = None,
 ) -> ToolRegistry:
     index = packaged_regulation_index() if regulations is None else regulations
+    relations = seed_graph_index() if graph is None else graph
     registry = ToolRegistry()
 
     def get_vehicle_context(payload: GetVehicleContextInput) -> VehicleContextOutput:
@@ -129,6 +141,21 @@ def build_vehicle_tools(
             input_model=SearchRegulationsInput,
             output_model=SearchRegulationsOutput,
             handler=search_regulations,
+        )
+    )
+
+    def query_vehicle_graph(payload: QueryVehicleGraphInput) -> QueryVehicleGraphOutput:
+        return QueryVehicleGraphOutput(
+            facts=relations.query(payload.vehicle_id, payload.device_id)
+        )
+
+    registry.register(
+        RegisteredTool(
+            name="query_vehicle_graph",
+            description="查询车辆、驾驶员、设备和故障的固定关系",
+            input_model=QueryVehicleGraphInput,
+            output_model=QueryVehicleGraphOutput,
+            handler=query_vehicle_graph,
         )
     )
     return registry

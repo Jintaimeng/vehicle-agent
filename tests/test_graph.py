@@ -44,11 +44,19 @@ def _alarm(**overrides) -> Alarm:
     return Alarm(**payload)
 
 
-def _run(tmp_path, alarm: Alarm, *, content: str = REPORT, regulations=None, **settings):
+def _run(
+    tmp_path,
+    alarm: Alarm,
+    *,
+    content: str = REPORT,
+    regulations=None,
+    graph=None,
+    **settings,
+):
     harness = Harness(
         _settings(**settings),
         FakeModelAdapter(content),
-        build_vehicle_tools(build_seed_repository(), regulations),
+        build_vehicle_tools(build_seed_repository(), regulations, graph),
     )
     graph = build_graph(harness, open_checkpointer(tmp_path / "checkpoints.sqlite"))
     config = {"configurable": {"thread_id": alarm.id}}
@@ -194,4 +202,90 @@ def test_regulation_budget_exhaustion_degrades_to_review(tmp_path) -> None:
     assert values["status"] == "awaiting_review"
     assert values["regulation_status"] == "degraded"
     assert values["errors"][-1]["code"] == "budget_exceeded"
+    assert "result" not in values
+
+
+class _EmptyGraph:
+    def query(self, vehicle_id: str, device_id: str) -> list:
+        return []
+
+
+class _FailingGraph:
+    def query(self, vehicle_id: str, device_id: str) -> list:
+        raise RuntimeError("vehicle graph unavailable")
+
+
+def test_graph_hit_adds_relationship_evidence(tmp_path) -> None:
+    _, values = _run(
+        tmp_path,
+        _alarm(vehicle_id="vehicle_001", driver_id="driver_001", speed_kmh=85, raw_confidence=0.9),
+    )
+
+    documents = [item for item in values["result"]["evidence"] if item["type"] == "document"]
+    relations = [item for item in values["result"]["evidence"] if item["type"] == "graph"]
+    assert values["status"] == "completed"
+    assert values["graph_status"] == "hit"
+    assert values["risk_score"] == 1.0
+    assert documents[0]["source"] == "fatigue-rules"
+    assert any(item["source"] == "drives:vehicle_001->driver_001" for item in relations)
+    assert any(item["source"] == "installed_with:vehicle_001->device_001" for item in relations)
+
+
+def test_graph_miss_requests_review(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm(), graph=_EmptyGraph())
+
+    assert values["status"] == "awaiting_review"
+    assert values["graph_status"] == "miss"
+    assert values["regulation_status"] == "hit"
+    assert values["requires_human_review"] is True
+    assert values["risk_score"] == 0.45
+    assert values["risk_level"] == "medium"
+    assert any("缺少与该车辆匹配的图谱关系" in item["description"] for item in values["evidence"])
+    assert "result" not in values
+
+
+def test_graph_failure_degrades_to_review(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm(), graph=_FailingGraph())
+
+    assert values["status"] == "awaiting_review"
+    assert values["graph_status"] == "degraded"
+    assert values["errors"][-1]["code"] == "tool_failed"
+    assert any("图谱查询不可用" in item["description"] for item in values["evidence"])
+    assert "result" not in values
+
+
+def test_graph_budget_exhaustion_degrades_to_review(tmp_path) -> None:
+    _, values = _run(tmp_path, _alarm(), max_tool_calls=3)
+
+    assert values["status"] == "awaiting_review"
+    assert values["regulation_status"] == "hit"
+    assert values["graph_status"] == "degraded"
+    assert values["errors"][-1]["code"] == "budget_exceeded"
+    assert "result" not in values
+
+
+def test_device_fault_conflicts_with_fatigue_rule(tmp_path) -> None:
+    _, values = _run(
+        tmp_path,
+        _alarm(
+            vehicle_id="vehicle_003",
+            driver_id="driver_003",
+            device_id="device_003",
+            speed_kmh=85,
+            raw_confidence=0.9,
+        ),
+    )
+
+    assert values["status"] == "awaiting_review"
+    assert values["graph_status"] == "hit"
+    assert values["regulation_status"] == "hit"
+    assert values["requires_human_review"] is True
+    assert values["risk_score"] == 0.8
+    documents = [item for item in values["evidence"] if item["type"] == "document"]
+    assert documents[0]["source"] == "fatigue-rules"
+    assert any(
+        item["type"] == "graph" and item["source"] == "has_fault:device_003->camera_occlusion"
+        for item in values["evidence"]
+    )
+    assert any("证据冲突" in item["description"] for item in values["evidence"])
     assert "result" not in values

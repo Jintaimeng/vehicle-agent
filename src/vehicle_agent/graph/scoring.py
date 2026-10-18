@@ -1,11 +1,14 @@
 from typing import Literal
 
 from vehicle_agent.domain.models import Alarm, AlarmValidity, Driver, Evidence, RiskLevel, Vehicle
+from vehicle_agent.knowledge.graph import GraphFact
 from vehicle_agent.knowledge.index import RegulationSnippet
 
 RegulationStatus = Literal["hit", "miss", "degraded"]
+GraphStatus = Literal["hit", "miss", "degraded"]
 _HIT_BONUS = 0.05
 _MISS_PENALTY = 0.2
+_CONFLICT_FAULT = "camera_occlusion"
 
 
 def score_fatigue(
@@ -17,6 +20,8 @@ def score_fatigue(
     review_confidence_threshold: float,
     regulations: list[RegulationSnippet] | None = None,
     regulation_status: RegulationStatus = "miss",
+    graph_facts: list[GraphFact] | None = None,
+    graph_status: GraphStatus = "miss",
 ) -> dict:
     """Deterministic risk score. The model is not allowed to override these fields."""
 
@@ -106,6 +111,32 @@ def score_fatigue(
         )
         evidence.append(Evidence(type="document", source="regulations", description=missing))
 
+    facts = graph_facts or []
+    conflict = regulation_status == "hit" and any(
+        item.relation == "has_fault" and item.target_id == _CONFLICT_FAULT for item in facts
+    )
+    if graph_status == "hit" and facts and not conflict:
+        confidence += _HIT_BONUS
+        evidence.extend(_graph_evidence(facts))
+    elif conflict:
+        confidence -= _MISS_PENALTY
+        evidence.extend(_graph_evidence(facts))
+        evidence.append(
+            Evidence(
+                type="graph",
+                source="vehicle_graph",
+                description="法规摘录要求按疲劳驾驶处置，但图谱显示设备存在摄像头遮挡故障，证据冲突",
+            )
+        )
+    else:
+        confidence -= _MISS_PENALTY
+        missing_graph = (
+            "图谱查询不可用，缺少车辆关系依据"
+            if graph_status == "degraded"
+            else "缺少与该车辆匹配的图谱关系"
+        )
+        evidence.append(Evidence(type="graph", source="vehicle_graph", description=missing_graph))
+
     risk_score = min(1.0, risk_score)
     confidence = min(0.95, max(0.0, confidence))
     if risk_score >= 0.75:
@@ -129,6 +160,19 @@ def score_fatigue(
         "requires_human_review": confidence < review_confidence_threshold
         or vehicle is None
         or driver is None
-        or regulation_status != "hit",
+        or regulation_status != "hit"
+        or graph_status != "hit"
+        or conflict,
         "evidence": [item.model_dump() for item in evidence],
     }
+
+
+def _graph_evidence(facts: list[GraphFact]) -> list[Evidence]:
+    return [
+        Evidence(
+            type="graph",
+            source=f"{item.relation}:{item.source_id}->{item.target_id}",
+            description=item.description,
+        )
+        for item in facts
+    ]

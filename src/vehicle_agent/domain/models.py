@@ -38,7 +38,7 @@ class Alarm(BaseModel):
 
 
 class Evidence(BaseModel):
-    type: Literal["history", "telemetry", "context", "document"]
+    type: Literal["history", "telemetry", "context", "document", "graph"]
     source: str
     description: str
 

@@ -19,7 +19,7 @@ isProject: true
 
 # 02 疲劳驾驶规则检索
 
-阶段 01 是已完成的 LangGraph Harness MVP，见 [.cursor/plans/01-langgraph-harness-mvp.plan.md](.cursor/plans/01-langgraph-harness-mvp.plan.md)。本文件是阶段 02。下一阶段若做图谱证据，使用 `03-` 前缀。目录按文件名排序即执行顺序。
+阶段 01 是已完成的 LangGraph Harness MVP，见 [.cursor/plans/01-langgraph-harness-mvp.plan.md](.cursor/plans/01-langgraph-harness-mvp.plan.md)。本文件是阶段 02。下一阶段是 [.cursor/plans/03-graph-evidence.plan.md](.cursor/plans/03-graph-evidence.plan.md)。目录按文件名排序即执行顺序。
 
 本阶段只证明一件事：法规摘录能作为只读工具进入现有研判，且不改变「代码评分、模型只写总结」的边界。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 15 节的引用原则，Qdrant、混合检索和 Recall@K 留到后续替换 `RegulationIndex`。
 

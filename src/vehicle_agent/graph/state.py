@@ -11,6 +11,8 @@ class JudgementState(TypedDict, total=False):
     history: list[dict]
     regulations: list[dict]
     regulation_status: Literal["hit", "miss", "degraded"]
+    graph_facts: list[dict]
+    graph_status: Literal["hit", "miss", "degraded"]
     risk_score: float
     risk_level: RiskLevel
     alarm_validity: AlarmValidity
@@ -24,4 +26,4 @@ class JudgementState(TypedDict, total=False):
     trace: list[dict]
 
 
-Route = Literal["context", "history", "retrieve", "score", "review", "report", "end"]
+Route = Literal["context", "history", "retrieve", "graph", "score", "review", "report", "end"]
