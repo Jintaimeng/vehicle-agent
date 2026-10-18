@@ -9,16 +9,18 @@ FastAPI
   -> LangGraph: validate -> context -> history -> retrieve -> graph -> score -> report
                                                                              \-> review -> report
   -> Harness: ModelAdapter + ToolRegistry + budget + trace
-  -> 内存仓储 / 本地法规摘录 / 内存图谱关系 / SQLite checkpoint
+  -> 内存仓储 / 本地法规摘录 / 图谱关系（默认内存，可切换 Neo4j） / SQLite checkpoint
 ```
 
 风险分数、风险等级和是否人工复核由代码规则计算。模型只根据已收集证据生成总结和处置建议。
 
 ## MVP 边界
 
-本阶段包含一条疲劳驾驶报警研判闭环、本地法规摘录检索、本地图谱关系和人工复核、检查点恢复。法规命中时证据带来源；图谱命中时另附车辆、驾驶员和设备关系。未命中、检索失败，或法规与摄像头遮挡故障冲突时，降低置信度并进入人工复核，研判不因此失败。
+本阶段包含一条疲劳驾驶报警研判闭环、本地法规摘录检索、图谱关系和人工复核、检查点恢复。法规命中时证据带来源；图谱命中时另附车辆、驾驶员和设备关系。未命中、检索失败，或法规与摄像头遮挡故障冲突时，降低置信度并进入人工复核，研判不因此失败。
 
-本阶段不包含 Kafka、Qdrant、Neo4j、YOLO、视觉大模型、MCP 和前端。法规检索走 `RegulationIndex`，当前实现读取仓库内 Markdown。图谱查询走 `GraphIndex`，当前实现是内存中的固定关系。工具通过 `ToolRegistry` 注册，后续可以原样封装成 MCP Server。
+图谱查询走 `GraphIndex`。默认实现是内存中的固定关系，不依赖数据库。把 `VEHICLE_AGENT_GRAPH_BACKEND` 设为 `neo4j` 后，同一工具改为读取 Neo4j 中的相同事实。查询语句是固定 Cypher，模型只使用已经校验过的 `vehicle_id` 和 `device_id`。
+
+本阶段不包含 Kafka、Qdrant、YOLO、视觉大模型、MCP 和前端。法规检索走 `RegulationIndex`，当前实现读取仓库内 Markdown。工具通过 `ToolRegistry` 注册，后续可以原样封装成 MCP Server。
 
 ## 环境
 
@@ -66,6 +68,28 @@ curl http://127.0.0.1:8000/api/v1/judgements/<task_id>
 
 ```powershell
 curl http://127.0.0.1:8000/api/v1/judgements/<task_id>/review -H "Content-Type: application/json" -d "{\"reviewer\":\"ops\",\"decision\":\"confirm\",\"comment\":\"人工确认\"}"
+```
+
+## Neo4j
+
+默认后端是内存图。需要 Neo4j 时，只启动下面这个服务。其中的口令仅限本机开发，写在 Compose 文件里，不要另建 `.env`。
+
+```powershell
+docker compose -f deployments/docker-compose.yml up -d
+```
+
+然后设置：
+
+- `VEHICLE_AGENT_GRAPH_BACKEND=neo4j`
+- `VEHICLE_AGENT_NEO4J_URI`，默认 `bolt://127.0.0.1:7687`
+- `VEHICLE_AGENT_NEO4J_USER`，默认 `neo4j`
+- `VEHICLE_AGENT_NEO4J_PASSWORD`，默认 `vehicle-agent-local`
+
+默认测试不连接数据库。图库起来之后，用下面的命令跑 Neo4j 研判验收：
+
+```powershell
+$env:VEHICLE_AGENT_RUN_NEO4J="1"
+D:\uv_venv\Scripts\python.exe -m pytest tests/test_neo4j_acceptance.py
 ```
 
 ## 检查

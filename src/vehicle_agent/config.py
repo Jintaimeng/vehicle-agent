@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,3 +21,7 @@ class Settings(BaseSettings):
     max_elapsed_seconds: float = 60
     review_confidence_threshold: float = 0.6
     checkpoint_path: str = Field(default="data/checkpoints.sqlite")
+    graph_backend: Literal["memory", "neo4j"] = "memory"
+    neo4j_uri: str = "bolt://127.0.0.1:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "vehicle-agent-local"

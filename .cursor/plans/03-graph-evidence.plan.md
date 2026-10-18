@@ -16,7 +16,7 @@ isProject: true
 
 # 03 疲劳驾驶图谱证据
 
-上一阶段是已实现的本地法规检索，见 [.cursor/plans/02-fatigue-regulation-retrieval.plan.md](.cursor/plans/02-fatigue-regulation-retrieval.plan.md)。本文件是阶段 03。下一阶段替换图存储时使用 [.cursor/plans/04-neo4j-graph-index.plan.md](.cursor/plans/04-neo4j-graph-index.plan.md)，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 15.4 节：固定关系、一到两跳、图谱结果变成可引用证据；冲突必须显式说明。Neo4j、Cypher、Qdrant、MCP、视觉和工单留到后续。
+上一阶段是已实现的本地法规检索，见 [.cursor/plans/02-fatigue-regulation-retrieval.plan.md](.cursor/plans/02-fatigue-regulation-retrieval.plan.md)。本文件是阶段 03。下一阶段是 [.cursor/plans/04-neo4j-graph-index.plan.md](.cursor/plans/04-neo4j-graph-index.plan.md)，用 Neo4j 替换图存储。本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 15.4 节：固定关系、一到两跳、图谱结果变成可引用证据；冲突必须显式说明。Qdrant、MCP、视觉和工单留到后续。
 
 本阶段只证明一件事：车辆、驾驶员、设备和故障关系能作为只读证据进入现有研判，且不改变「代码评分、模型只写总结」。
 

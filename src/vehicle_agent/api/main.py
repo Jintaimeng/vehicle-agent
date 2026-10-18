@@ -12,6 +12,7 @@ from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.model import ModelAdapter, OpenAICompatibleModel
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.harness.tools import build_vehicle_tools
+from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
 from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.repositories.memory import build_seed_repository
 
@@ -30,10 +31,15 @@ def create_app(
     repository: AlarmRepository,
     model: ModelAdapter,
     checkpointer,
+    graph_index=None,
 ) -> FastAPI:
-    graph = build_graph(Harness(settings, model, build_vehicle_tools(repository)), checkpointer)
+    index = _graph_index(settings) if graph_index is None else graph_index
+    tools = build_vehicle_tools(repository, graph=index)
+    graph = build_graph(Harness(settings, model, tools), checkpointer)
     app = FastAPI(title="Vehicle Guard AI", version="0.1.0")
     app.state.graph = graph
+    app.state.graph_index = index
+    app.state.tools = tools
 
     @app.exception_handler(HTTPException)
     async def http_error(_request, exc: HTTPException) -> JSONResponse:
@@ -69,11 +75,24 @@ def create_app(
 
 def build_default_app() -> FastAPI:
     settings = Settings()
+    index = _graph_index(settings)
+    if isinstance(index, Neo4jGraphIndex):
+        index.ensure_ready()
     return create_app(
         settings,
         build_seed_repository(),
         OpenAICompatibleModel(settings),
         open_checkpointer(settings.checkpoint_path),
+        graph_index=index,
+    )
+
+
+def _graph_index(settings: Settings):
+    return open_graph_index(
+        settings.graph_backend,
+        uri=settings.neo4j_uri,
+        user=settings.neo4j_user,
+        password=settings.neo4j_password,
     )
 
 

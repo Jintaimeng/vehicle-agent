@@ -1,0 +1,11 @@
+# 仅限本地开发。口令写在本文件中，只给本机 Neo4j 使用，不要用于共享环境或生产环境。
+# 不另建 .env，避免把口令放到会被误提交的环境文件里。
+
+services:
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/vehicle-agent-local

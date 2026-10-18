@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.27",
     "langgraph>=0.2.60",
     "langgraph-checkpoint-sqlite>=2.0",
+    "neo4j>=5.26,<6",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "uvicorn>=0.32",
@@ -28,7 +29,7 @@ build-backend = "hatchling.build"
 "src/vehicle_agent/knowledge/regulations" = "vehicle_agent/knowledge/regulations"
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 
 [tool.ruff]
