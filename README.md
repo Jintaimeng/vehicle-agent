@@ -18,11 +18,11 @@ FastAPI
 
 本阶段包含一条疲劳驾驶报警研判闭环、法规摘录检索、图谱关系和人工复核、检查点恢复。法规命中时证据带来源；图谱命中时另附车辆、驾驶员和设备关系。未命中、检索失败，或法规与摄像头遮挡故障冲突时，降低置信度并进入人工复核，研判不因此失败。
 
-法规检索走 `RegulationIndex`。默认实现读取仓库内 Markdown。把 `VEHICLE_AGENT_REGULATION_BACKEND` 设为 `qdrant` 后，同一工具改为读取 Qdrant 中的相同摘录。查询是固定的 payload 过滤，模型只使用已经校验过的 `alarm_type`。
+法规检索走 `RegulationIndex`。默认实现读取仓库内 Markdown。把 `VEHICLE_AGENT_REGULATION_BACKEND` 设为 `qdrant` 后，同一工具改为读取 Qdrant 中的相同摘录。排序是字符二元组哈希向量、词项重叠、RRF 和固定加权重排，查询短语由报警类型查表得到。模型只使用已经校验过的 `alarm_type`。
 
 图谱查询走 `GraphIndex`。默认实现是内存中的固定关系，不依赖数据库。把 `VEHICLE_AGENT_GRAPH_BACKEND` 设为 `neo4j` 后，同一工具改为读取 Neo4j 中的相同事实。查询语句是固定 Cypher，模型只使用已经校验过的 `vehicle_id` 和 `device_id`。
 
-本阶段不包含混合检索、Kafka、YOLO、视觉大模型、MCP 和前端。工具通过 `ToolRegistry` 注册，后续可以原样封装成 MCP Server。
+本阶段不包含神经网络 Embedding、YOLO、视觉大模型、MCP、Kafka 和前端。工具通过 `ToolRegistry` 注册，后续可以原样封装成 MCP Server。
 
 ## 环境
 
@@ -96,7 +96,7 @@ D:\uv_venv\Scripts\python.exe -m pytest tests/test_neo4j_acceptance.py
 
 ## Qdrant
 
-默认后端读取仓库内 Markdown。需要 Qdrant 时，只启动下面这个服务。
+默认后端读取仓库内 Markdown，并用同一套混合排序。需要 Qdrant 时，只启动下面这个服务。已有 `regulations` 集合的向量维度不是 128 时，启动后会删除并重建。
 
 ```powershell
 docker compose -f deployments/docker-compose.yml up -d qdrant

@@ -1,0 +1,46 @@
+{
+  "recall_at_1": [6, 7],
+  "recall_at_3": [7, 7],
+  "cases": [
+    {
+      "query": "行驶中疲劳驾驶报警应就近停车休息",
+      "alarm_type": "driver_fatigue",
+      "relevant": [{"document_id": "fatigue-rules", "section": "第2节 行驶中的报警"}]
+    },
+    {
+      "query": "设备短时间离线或视频缺失先核对供电",
+      "alarm_type": "device_offline",
+      "relevant": [{"document_id": "device-offline-rules", "section": "第1节 视频缺失"}]
+    },
+    {
+      "query": "行驶中手持电话应语音警告并记录",
+      "alarm_type": "phone_use",
+      "relevant": [{"document_id": "phone-rules", "section": "第1节 行驶中通话"}]
+    },
+    {
+      "query": "超过路段限速应提示驾驶员减速",
+      "alarm_type": "speeding",
+      "relevant": [{"document_id": "speeding-rules", "section": "第1节 速度提示"}]
+    },
+    {
+      "query": "摄像头画面被遮挡先核对镜头和供电",
+      "alarm_type": "camera_occlusion",
+      "relevant": [{"document_id": "camera-rules", "section": "第1节 画面缺失"}]
+    },
+    {
+      "query": "行驶中疲劳驾驶报警应就近停车休息",
+      "alarm_type": null,
+      "relevant": [{"document_id": "fatigue-rules", "section": "第2节 行驶中的报警"}]
+    },
+    {
+      "query": "视频缺失时先核对供电和镜头",
+      "alarm_type": null,
+      "relevant": [{"document_id": "camera-rules", "section": "第1节 画面缺失"}]
+    },
+    {
+      "query": "冷库温度盘点表",
+      "alarm_type": null,
+      "relevant": []
+    }
+  ]
+}

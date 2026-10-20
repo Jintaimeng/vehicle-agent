@@ -16,7 +16,7 @@ isProject: true
 
 # 05 Qdrant 法规索引
 
-上一阶段是已实现的 Neo4j 图谱索引，见 [.cursor/plans/04-neo4j-graph-index.plan.md](.cursor/plans/04-neo4j-graph-index.plan.md)。本文件是阶段 05。下一阶段做混合检索与 Recall@K 时使用 [.cursor/plans/06-hybrid-regulation-retrieval.plan.md](.cursor/plans/06-hybrid-regulation-retrieval.plan.md)，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 15 节的可引用摘录；混合检索、重排和评测留到阶段 06。MCP、视觉、工单和 Kafka 继续留到后续。
+上一阶段是已实现的 Neo4j 图谱索引，见 [.cursor/plans/04-neo4j-graph-index.plan.md](.cursor/plans/04-neo4j-graph-index.plan.md)。本文件是阶段 05。下一阶段是 [.cursor/plans/06-hybrid-regulation-retrieval.plan.md](.cursor/plans/06-hybrid-regulation-retrieval.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 15 节的可引用摘录；混合检索、重排和评测留到阶段 06。MCP、视觉、工单和 Kafka 继续留到后续。
 
 本阶段只证明一件事：现有 `RegulationIndex` 可以由 Qdrant 提供相同摘录，且不改变「代码评分、模型只写总结」。
 

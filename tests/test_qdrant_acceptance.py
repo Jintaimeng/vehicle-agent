@@ -1,8 +1,10 @@
+import json
 import os
 
 import pytest
 
 from test_graph import REPORT, _alarm, _run
+from test_hybrid import _EVAL_PATH
 from vehicle_agent.api.main import create_app
 from vehicle_agent.config import Settings
 from vehicle_agent.graph.checkpoint import open_checkpointer
@@ -24,15 +26,22 @@ class _UnknownAlarmQuery:
 
     def search(self, alarm_type: str):
         assert alarm_type == "driver_fatigue"
-        return self._index.search("phone_use")
+        return self._index.search("cargo_shift")
 
 
 def test_live_qdrant_matches_markdown_seed() -> None:
     index = QdrantRegulationIndex("http://127.0.0.1:6333")
     try:
         markdown = packaged_regulation_index()
-        for alarm_type in ("driver_fatigue", "device_offline", "phone_use"):
+        for alarm_type in ("driver_fatigue", "device_offline", "phone_use", "cargo_shift"):
             assert index.search(alarm_type) == markdown.search(alarm_type)
+        evaluation = json.loads(_EVAL_PATH.read_text(encoding="utf-8"))
+        for case in evaluation["cases"]:
+            if case["alarm_type"] is None:
+                continue
+            assert index.search(case["alarm_type"], query=case["query"]) == markdown.search(
+                case["alarm_type"], query=case["query"]
+            )
         index.ensure_ready()
         assert index.search("driver_fatigue") == markdown.search("driver_fatigue")
     finally:
@@ -137,7 +146,7 @@ def test_live_camera_occlusion_conflicts_with_the_same_speed_score(tmp_path) -> 
 def test_live_unknown_alarm_type_requests_review(tmp_path) -> None:
     index = QdrantRegulationIndex("http://127.0.0.1:6333")
     try:
-        assert index.search("phone_use") == []
+        assert index.search("cargo_shift") == []
         _, values = _run(tmp_path, _alarm(), regulations=_UnknownAlarmQuery(index))
         assert values["status"] == "awaiting_review"
         assert values["regulation_status"] == "miss"

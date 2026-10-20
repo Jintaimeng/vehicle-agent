@@ -44,6 +44,8 @@ def test_packaged_fatigue_rule_is_searchable() -> None:
     snippets = packaged_regulation_index().search("driver_fatigue")
     assert snippets[0].document_id == "fatigue-rules"
     assert snippets[0].title == "疲劳驾驶处置要点"
+    assert "第2节" in snippets[0].section
+    assert snippets[1].document_id == "fatigue-training"
 
 
 def test_incomplete_section_is_rejected() -> None:

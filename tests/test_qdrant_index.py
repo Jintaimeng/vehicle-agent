@@ -5,9 +5,10 @@ from vehicle_agent.api.main import create_app
 from vehicle_agent.config import Settings
 from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.model import FakeModelAdapter
+from vehicle_agent.knowledge.hybrid import VECTOR_SIZE, regulation_vector
 from vehicle_agent.knowledge.index import (
     REGULATION_COLLECTION,
-    REGULATION_VECTOR,
+    REGULATION_QUERIES,
     MarkdownRegulationIndex,
     QdrantRegulationIndex,
     packaged_regulation_entries,
@@ -20,10 +21,14 @@ from vehicle_agent.repositories.memory import build_seed_repository
 class _FakeClient:
     def __init__(self) -> None:
         self.points: dict[str, dict] = {}
+        self.vectors: dict[str, list[float]] = {}
         self.upsert_ids: list[list[str]] = []
         self.scrolls: list = []
+        self.queries: list = []
         self.create_calls = 0
+        self.deleted = 0
         self.exists = False
+        self.vector_size: int | None = None
 
     def collection_exists(self, name: str) -> bool:
         assert name == REGULATION_COLLECTION
@@ -31,8 +36,9 @@ class _FakeClient:
 
     def create_collection(self, collection_name: str, vectors_config) -> None:
         assert collection_name == REGULATION_COLLECTION
-        assert vectors_config.size == len(REGULATION_VECTOR)
+        assert vectors_config.size == VECTOR_SIZE
         assert vectors_config.distance.value == "Cosine"
+        self.vector_size = vectors_config.size
         self.exists = True
         self.create_calls += 1
 
@@ -40,10 +46,33 @@ class _FakeClient:
         assert collection_name == REGULATION_COLLECTION
         ids = []
         for point in points:
-            assert point.vector == REGULATION_VECTOR
+            snippet_text = "\n".join(
+                (point.payload["title"], point.payload["section"], point.payload["excerpt"])
+            )
+            assert point.vector == regulation_vector(snippet_text)
             self.points[point.id] = point.payload
+            self.vectors[point.id] = list(point.vector)
             ids.append(point.id)
         self.upsert_ids.append(ids)
+
+    def get_collection(self, name: str):
+        assert name == REGULATION_COLLECTION
+        return _Collection(self.vector_size)
+
+    def delete_collection(self, name: str) -> None:
+        assert name == REGULATION_COLLECTION
+        self.exists = False
+        self.points.clear()
+        self.vectors.clear()
+        self.vector_size = None
+        self.deleted += 1
+
+    def query_points(self, collection_name: str, query, query_filter, limit: int, **_kwargs):
+        assert collection_name == REGULATION_COLLECTION
+        assert limit == 64
+        assert len(query) == VECTOR_SIZE
+        self.queries.append((query, query_filter))
+        return _QueryResponse([])
 
     def scroll(self, collection_name: str, scroll_filter, limit: int, offset, **_kwargs):
         assert collection_name == REGULATION_COLLECTION
@@ -59,6 +88,31 @@ class _FakeClient:
 
     def close(self) -> None:
         return None
+
+
+class _Collection:
+    def __init__(self, vector_size: int | None) -> None:
+        self.config = _Config(vector_size)
+
+
+class _Config:
+    def __init__(self, vector_size: int | None) -> None:
+        self.params = _Params(vector_size)
+
+
+class _Params:
+    def __init__(self, vector_size: int | None) -> None:
+        self.vectors = _Vectors(vector_size)
+
+
+class _Vectors:
+    def __init__(self, size: int | None) -> None:
+        self.size = size
+
+
+class _QueryResponse:
+    def __init__(self, points: list) -> None:
+        self.points = points
 
 
 class _Point:
@@ -80,13 +134,15 @@ def test_fake_client_matches_markdown_and_records_the_filter() -> None:
     index, client = _index()
     markdown = packaged_regulation_index()
 
-    for alarm_type in ("driver_fatigue", "device_offline", "phone_use"):
+    for alarm_type in ("driver_fatigue", "device_offline", "phone_use", "cargo_shift"):
         assert index.search(alarm_type) == markdown.search(alarm_type)
 
     assert client.scrolls
     assert client.scrolls[0] == regulation_query_filter("driver_fatigue")
     assert client.scrolls[1] == regulation_query_filter("device_offline")
-    assert index.search("phone_use") == []
+    assert client.queries[0][0] == regulation_vector(REGULATION_QUERIES["driver_fatigue"])
+    assert client.queries[0][1] == regulation_query_filter("driver_fatigue")
+    assert index.search("cargo_shift") == []
 
 
 def test_upsert_keeps_the_same_point_ids() -> None:
@@ -99,6 +155,20 @@ def test_upsert_keeps_the_same_point_ids() -> None:
     assert len(client.points) == len(packaged_regulation_entries())
     assert client.upsert_ids[0] == client.upsert_ids[1]
     assert client.upsert_ids == [client.upsert_ids[0], client.upsert_ids[0]]
+
+
+def test_wrong_vector_size_recreates_the_collection() -> None:
+    client = _FakeClient()
+    client.exists = True
+    client.vector_size = 1
+    index, _stored = _index(client)
+
+    index.ensure_ready()
+
+    assert client.deleted == 1
+    assert client.create_calls == 1
+    assert client.vector_size == VECTOR_SIZE
+    assert len(client.points) == len(packaged_regulation_entries())
 
 
 def test_client_errors_propagate() -> None:

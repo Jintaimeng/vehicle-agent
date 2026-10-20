@@ -20,8 +20,17 @@ class RegulationIndex(Protocol):
     def search(self, alarm_type: str) -> list[RegulationSnippet]: ...
 
 
+REGULATION_QUERIES = {
+    "driver_fatigue": "行驶中疲劳驾驶报警应就近停车休息",
+    "device_offline": "设备短时间离线或视频缺失先核对供电",
+    "phone_use": "行驶中手持电话应语音警告并记录",
+    "speeding": "超过路段限速应提示驾驶员减速",
+    "camera_occlusion": "摄像头画面被遮挡先核对镜头和供电",
+}
+
+
 class MarkdownRegulationIndex:
-    """Match packaged Markdown sections by alarm type. No vector search."""
+    """Rank packaged Markdown sections with the shared hybrid retrieval."""
 
     def __init__(self, documents: list[tuple[set[str], RegulationSnippet]]) -> None:
         self._documents = documents
@@ -36,9 +45,11 @@ class MarkdownRegulationIndex:
             documents.extend(parse_regulation_document(path.read_text(encoding="utf-8")))
         return cls(documents)
 
-    def search(self, alarm_type: str) -> list[RegulationSnippet]:
-        matched = [snippet for alarm_types, snippet in self._documents if alarm_type in alarm_types]
-        return sorted(matched, key=_snippet_order)
+    def search(self, alarm_type: str, query: str | None = None) -> list[RegulationSnippet]:
+        matched = [
+            snippet for alarm_types, snippet in self._documents if alarm_type in alarm_types
+        ]
+        return _rank_snippets(matched, _regulation_query(alarm_type, query))
 
 
 def packaged_regulation_index() -> MarkdownRegulationIndex:
@@ -53,7 +64,6 @@ def packaged_regulation_entries() -> list[tuple[frozenset[str], RegulationSnippe
 
 
 REGULATION_COLLECTION = "regulations"
-REGULATION_VECTOR = [1.0]
 _SCROLL_LIMIT = 64
 
 
@@ -72,7 +82,7 @@ def regulation_query_filter(alarm_type: str):
 
 
 class QdrantRegulationIndex:
-    """Same excerpts as the Markdown index, read with a fixed payload filter."""
+    """Same hybrid ranking as the Markdown index, with Qdrant cosine search."""
 
     def __init__(self, url: str, *, client=None) -> None:
         self._url = url
@@ -80,14 +90,25 @@ class QdrantRegulationIndex:
         self._owns_client = client is None
         self._ready = False
 
-    def search(self, alarm_type: str) -> list[RegulationSnippet]:
+    def search(self, alarm_type: str, query: str | None = None) -> list[RegulationSnippet]:
+        from vehicle_agent.knowledge.hybrid import regulation_vector
+
         self.ensure_ready()
+        phrase = _regulation_query(alarm_type, query)
+        query_filter = regulation_query_filter(alarm_type)
+        self._client.query_points(
+            collection_name=REGULATION_COLLECTION,
+            query=regulation_vector(phrase),
+            query_filter=query_filter,
+            limit=_SCROLL_LIMIT,
+            with_payload=True,
+        )
         snippets: list[RegulationSnippet] = []
         offset = None
         while True:
             points, offset = self._client.scroll(
                 collection_name=REGULATION_COLLECTION,
-                scroll_filter=regulation_query_filter(alarm_type),
+                scroll_filter=query_filter,
                 limit=_SCROLL_LIMIT,
                 offset=offset,
                 with_payload=True,
@@ -96,25 +117,30 @@ class QdrantRegulationIndex:
             snippets.extend(_snippet_from_payload(point.payload) for point in points)
             if offset is None:
                 break
-        return sorted(snippets, key=_snippet_order)
+        return _rank_snippets(snippets, phrase)
 
     def ensure_ready(self) -> None:
+        from vehicle_agent.knowledge.hybrid import VECTOR_SIZE, regulation_text, regulation_vector
+
         client = self._require_client()
         if self._ready:
             return
         from qdrant_client.models import Distance, PointStruct, VectorParams
 
+        if client.collection_exists(REGULATION_COLLECTION):
+            if _collection_vector_size(client) != VECTOR_SIZE:
+                client.delete_collection(REGULATION_COLLECTION)
         if not client.collection_exists(REGULATION_COLLECTION):
             client.create_collection(
                 collection_name=REGULATION_COLLECTION,
-                vectors_config=VectorParams(size=len(REGULATION_VECTOR), distance=Distance.COSINE),
+                vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
             )
         client.upsert(
             collection_name=REGULATION_COLLECTION,
             points=[
                 PointStruct(
                     id=regulation_point_id(snippet.document_id, snippet.section),
-                    vector=list(REGULATION_VECTOR),
+                    vector=regulation_vector(regulation_text(snippet)),
                     payload={
                         "document_id": snippet.document_id,
                         "title": snippet.title,
@@ -154,8 +180,25 @@ def open_regulation_index(
     raise ValueError(f"unsupported regulation backend: {backend}")
 
 
-def _snippet_order(snippet: RegulationSnippet) -> tuple[str, str]:
-    return (snippet.document_id, snippet.section)
+def _regulation_query(alarm_type: str, query: str | None) -> str:
+    if query is not None:
+        return query
+    return REGULATION_QUERIES.get(alarm_type, alarm_type)
+
+
+def _rank_snippets(snippets: list[RegulationSnippet], query: str) -> list[RegulationSnippet]:
+    from vehicle_agent.knowledge.hybrid import hybrid_rank
+
+    return hybrid_rank(snippets, query)
+
+
+def _collection_vector_size(client) -> int | None:
+    info = client.get_collection(REGULATION_COLLECTION)
+    vectors = info.config.params.vectors
+    if hasattr(vectors, "size"):
+        return vectors.size
+    named = next(iter(vectors.values()))
+    return named.size
 
 
 def _snippet_from_payload(payload: dict) -> RegulationSnippet:
