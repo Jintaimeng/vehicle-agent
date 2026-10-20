@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_base_url: str = "http://127.0.0.1:8001/v1"
     model_api_key: str = "local"
     model_name: str = "qwen"
-    prompt_version: str = "report-v3"
+    prompt_version: str = "report-v4"
     request_timeout_seconds: float = 30
     max_retries: int = 2
     max_tool_calls: int = 8
@@ -30,3 +30,5 @@ class Settings(BaseSettings):
     tool_backend: Literal["local", "mcp"] = "local"
     mcp_transport: Literal["memory", "stdio"] = "memory"
     mcp_role: str = "monitor"
+    vision_backend: Literal["fixture", "yolo"] = "fixture"
+    yolo_weights: str = "data/yolo.pt"

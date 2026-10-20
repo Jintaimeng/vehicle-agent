@@ -6,10 +6,10 @@
 
 ```text
 FastAPI
-  -> LangGraph: validate -> context -> history -> retrieve -> graph -> score -> report
-                                                                             \-> review -> report
+  -> LangGraph: validate -> context -> history -> retrieve -> graph -> vision -> score -> report
+                                                                                      \-> review -> report
   -> Harness: ModelAdapter + ToolRegistry + budget + trace
-  -> 内存仓储 / 法规摘录（默认 Markdown，可切换 Qdrant） / 图谱关系（默认内存，可切换 Neo4j） / SQLite checkpoint
+  -> 内存仓储 / 法规摘录（默认 Markdown，可切换 Qdrant） / 图谱关系（默认内存，可切换 Neo4j） / 图片检测（默认定样本，可切换 YOLO） / SQLite checkpoint
   -> 工具默认在进程内调用，可改为 MCP 进程内传输或 stdio 子进程
 ```
 
@@ -25,7 +25,11 @@ FastAPI
 
 工具通过 `ToolRegistry` 注册。默认 `VEHICLE_AGENT_TOOL_BACKEND=local`，研判直接调用进程内 handler。设为 `mcp` 后，同名工具改为 MCP `tools/call`。`VEHICLE_AGENT_MCP_TRANSPORT` 默认 `memory`，在进程内走 MCP 协议；设为 `stdio` 时拉起 `python -m vehicle_agent.mcp`。调用方角色是 `VEHICLE_AGENT_MCP_ROLE`，默认 `monitor`。四个工具都是只读，可以安全重试。
 
-本阶段不包含神经网络 Embedding、YOLO、视觉大模型、视觉 MCP、工单 MCP、Kafka 和前端。
+图片检测走 `VisionIndex`，由研判节点直接调用，不进入 MCP。报警可以带可选 `image_id`。没有图片时跳过检测，风险分、置信度和复核条件与之前一致。有图片时返回归一化检测框、类别和置信度，并作为 `vision` 证据。视觉复核只根据检测 JSON 写可见事实，不改风险分。`POST /api/v1/vision/images` 用同一检测器。
+
+默认 `VEHICLE_AGENT_VISION_BACKEND=fixture`，读取仓库内定样本，不解码像素。设为 `yolo` 后使用 `VEHICLE_AGENT_YOLO_WEIGHTS`（默认 `data/yolo.pt`）。YOLO 依赖 `ultralytics`，不在默认安装里。
+
+本阶段不包含神经网络 Embedding、视觉 MCP、视频抽帧、工单 MCP、Kafka 和前端。
 
 ## 环境
 
@@ -132,6 +136,20 @@ $env:VEHICLE_AGENT_MCP_TRANSPORT="stdio"
 $env:VEHICLE_AGENT_RUN_MCP="1"
 D:\uv_venv\Scripts\python.exe -m pytest tests/test_mcp_acceptance.py
 ```
+
+## 图片视觉
+
+默认定样本，不需要权重。需要 YOLO 时安装可选依赖，并准备权重和一张本地图片：
+
+```powershell
+uv pip install -e ".[vision]" --python D:\uv_venv
+$env:VEHICLE_AGENT_RUN_YOLO="1"
+$env:VEHICLE_AGENT_YOLO_WEIGHTS="data/yolo.pt"
+$env:VEHICLE_AGENT_YOLO_IMAGE="data/vision-sample.jpg"
+D:\uv_venv\Scripts\python.exe -m pytest tests/test_yolo_acceptance.py
+```
+
+权重或图片不存在时，这条验收会跳过。默认 `pytest` 不加载 YOLO。
 
 ## 检查
 

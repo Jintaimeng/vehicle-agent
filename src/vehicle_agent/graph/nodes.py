@@ -4,13 +4,21 @@ from collections.abc import Callable
 from langgraph.types import interrupt
 from pydantic import BaseModel, ValidationError
 
-from vehicle_agent.domain.models import Alarm, Driver, HumanReview, JudgementResult, Vehicle
+from vehicle_agent.domain.models import (
+    Alarm,
+    Detection,
+    Driver,
+    HumanReview,
+    JudgementResult,
+    Vehicle,
+)
 from vehicle_agent.graph.scoring import score_fatigue
 from vehicle_agent.graph.state import JudgementState
 from vehicle_agent.harness.errors import HarnessError
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import GraphFact
 from vehicle_agent.knowledge.index import RegulationSnippet
+from vehicle_agent.knowledge.vision import VisionIndex
 
 
 class ReportDraft(BaseModel):
@@ -18,7 +26,13 @@ class ReportDraft(BaseModel):
     recommendations: list[str]
 
 
-def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
+class VisionReview(BaseModel):
+    visible_facts: list[str]
+
+
+def make_nodes(
+    harness: Harness, vision_index: VisionIndex
+) -> dict[str, Callable[[JudgementState], dict]]:
     settings = harness.settings
 
     def traced(update: dict) -> dict:
@@ -101,6 +115,67 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
         status = "hit" if facts else "miss"
         return traced({"graph_facts": facts, "graph_status": status})
 
+    def analyze_vision(state: JudgementState) -> dict:
+        alarm = Alarm.model_validate(state["alarm"])
+        if not alarm.image_id:
+            return traced(
+                {
+                    "detections": [],
+                    "vision_status": "skipped",
+                    "vlm_status": "skipped",
+                    "visible_facts": [],
+                }
+            )
+        try:
+            detections = vision_index.analyze(alarm.image_id)
+        except Exception as exc:
+            errors = [*state.get("errors", []), {"code": "vision_unavailable", "message": str(exc)}]
+            return traced(
+                {
+                    "detections": [],
+                    "vision_status": "degraded",
+                    "vlm_status": "skipped",
+                    "visible_facts": [],
+                    "errors": errors,
+                }
+            )
+        payload = [item.model_dump() for item in detections]
+        if not detections:
+            return traced(
+                {
+                    "detections": [],
+                    "vision_status": "miss",
+                    "vlm_status": "skipped",
+                    "visible_facts": [],
+                }
+            )
+        try:
+            review = harness.complete_structured(
+                _vision_messages(alarm.image_id, payload),
+                VisionReview,
+                task_id=state["task_id"],
+                node="vision",
+            )
+        except HarnessError as exc:
+            errors = [*state.get("errors", []), {"code": exc.code, "message": str(exc)}]
+            return traced(
+                {
+                    "detections": payload,
+                    "vision_status": "hit",
+                    "vlm_status": "degraded",
+                    "visible_facts": [],
+                    "errors": errors,
+                }
+            )
+        return traced(
+            {
+                "detections": payload,
+                "vision_status": "hit",
+                "vlm_status": "hit",
+                "visible_facts": review.visible_facts,
+            }
+        )
+
     def score(state: JudgementState) -> dict:
         alarm = Alarm.model_validate(state["alarm"])
         vehicle = None
@@ -114,6 +189,7 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
             RegulationSnippet.model_validate(item) for item in state.get("regulations", [])
         ]
         graph_facts = [GraphFact.model_validate(item) for item in state.get("graph_facts", [])]
+        detections = [Detection.model_validate(item) for item in state.get("detections", [])]
         scored = score_fatigue(
             alarm,
             vehicle,
@@ -124,6 +200,10 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
             regulation_status=state.get("regulation_status", "miss"),
             graph_facts=graph_facts,
             graph_status=state.get("graph_status", "miss"),
+            detections=detections,
+            vision_status=state.get("vision_status", "skipped"),
+            vlm_status=state.get("vlm_status", "skipped"),
+            visible_facts=state.get("visible_facts", []),
         )
         status = "awaiting_review" if scored["requires_human_review"] else "ready_to_report"
         return traced({**scored, "status": status})
@@ -151,6 +231,7 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
                     "输出 JSON 对象，字段为 summary 和 recommendations。"
                     "不要编造未提供的证据。没有 document 证据时，不要引用法规条款。"
                     "没有 graph 证据时，不要编造车辆、驾驶员、设备或故障关系。"
+                    "没有 vision 证据时，不要编造检测框或画面事实。"
                 ),
             },
             {
@@ -164,6 +245,8 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
                         "evidence": state.get("evidence", []),
                         "regulations": state.get("regulations", []),
                         "graph_facts": state.get("graph_facts", []),
+                        "detections": state.get("detections", []),
+                        "visible_facts": state.get("visible_facts", []),
                         "human_review": state.get("human_review"),
                         "prompt_version": settings.prompt_version,
                     },
@@ -199,7 +282,28 @@ def make_nodes(harness: Harness) -> dict[str, Callable[[JudgementState], dict]]:
         "history": load_history,
         "retrieve": retrieve,
         "graph": query_graph,
+        "vision": analyze_vision,
         "score": score,
         "review": review,
         "report": report,
     }
+
+
+def _vision_messages(image_id: str, detections: list[dict]) -> list[dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "你是画面复核助手。只根据给定检测框描述可见事实。"
+                "输出 JSON 对象，字段为 visible_facts。"
+                "不要推测身份，不要修改检测类别、置信度或风险分。"
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(
+                {"image_id": image_id, "detections": detections},
+                ensure_ascii=False,
+            ),
+        },
+    ]

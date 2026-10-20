@@ -4,16 +4,26 @@ from langgraph.graph import END, START, StateGraph
 from vehicle_agent.graph.nodes import make_nodes
 from vehicle_agent.graph.state import JudgementState, Route
 from vehicle_agent.harness.runtime import Harness
+from vehicle_agent.knowledge.vision import VisionIndex, open_vision_index
 
 
-def build_graph(harness: Harness, checkpointer: SqliteSaver):
-    nodes = make_nodes(harness)
+def build_graph(
+    harness: Harness,
+    checkpointer: SqliteSaver,
+    vision_index: VisionIndex | None = None,
+):
+    index = vision_index or open_vision_index(
+        harness.settings.vision_backend,
+        weights=harness.settings.yolo_weights,
+    )
+    nodes = make_nodes(harness, index)
     graph = StateGraph(JudgementState)
     graph.add_node("validate", nodes["validate"])
     graph.add_node("context", nodes["context"])
     graph.add_node("history", nodes["history"])
     graph.add_node("retrieve", nodes["retrieve"])
     graph.add_node("graph", nodes["graph"])
+    graph.add_node("vision", nodes["vision"])
     graph.add_node("score", nodes["score"])
     graph.add_node("review", nodes["review"])
     graph.add_node("report", nodes["report"])
@@ -23,7 +33,8 @@ def build_graph(harness: Harness, checkpointer: SqliteSaver):
     graph.add_conditional_edges("context", _after_context, {"history": "history", "end": END})
     graph.add_conditional_edges("history", _after_history, {"retrieve": "retrieve", "end": END})
     graph.add_edge("retrieve", "graph")
-    graph.add_edge("graph", "score")
+    graph.add_edge("graph", "vision")
+    graph.add_edge("vision", "score")
     graph.add_conditional_edges("score", _after_score, {"review": "review", "report": "report"})
     graph.add_edge("review", "report")
     graph.add_edge("report", END)

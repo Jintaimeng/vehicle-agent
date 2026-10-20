@@ -1,22 +1,29 @@
 from contextlib import asynccontextmanager
+from typing import Annotated
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from langgraph.types import Command
 from pydantic import BaseModel
 
 from vehicle_agent.config import Settings
-from vehicle_agent.domain.models import Alarm, HumanReview, JudgementResult
+from vehicle_agent.domain.models import Alarm, Detection, HumanReview, JudgementResult
 from vehicle_agent.graph.builder import build_graph
 from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.model import ModelAdapter, OpenAICompatibleModel
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
 from vehicle_agent.knowledge.index import QdrantRegulationIndex, open_regulation_index
+from vehicle_agent.knowledge.vision import open_vision_index
 from vehicle_agent.mcp.client import open_registered_tools
 from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.repositories.memory import build_seed_repository
+
+
+class VisionImageView(BaseModel):
+    image_id: str
+    detections: list[Detection]
 
 
 class TaskView(BaseModel):
@@ -35,10 +42,14 @@ def create_app(
     checkpointer,
     graph_index=None,
     regulation_index=None,
+    vision_index=None,
 ) -> FastAPI:
     index = _graph_index(settings) if graph_index is None else graph_index
-    regulations = (
-        _regulation_index(settings) if regulation_index is None else regulation_index
+    regulations = _regulation_index(settings) if regulation_index is None else regulation_index
+    vision = (
+        open_vision_index(settings.vision_backend, weights=settings.yolo_weights)
+        if vision_index is None
+        else vision_index
     )
     tools, mcp_session = open_registered_tools(settings, repository, regulations, index)
 
@@ -50,8 +61,9 @@ def create_app(
         _close_index(index)
         _close_index(regulations)
 
-    graph = build_graph(Harness(settings, model, tools), checkpointer)
+    graph = build_graph(Harness(settings, model, tools), checkpointer, vision)
     app = FastAPI(title="Vehicle Guard AI", version="0.1.0", lifespan=lifespan)
+    app.state.vision_index = vision
     app.state.graph = graph
     app.state.graph_index = index
     app.state.regulation_index = regulations
@@ -65,6 +77,21 @@ def create_app(
         else:
             body = {"code": "http_error", "message": str(exc.detail)}
         return JSONResponse(status_code=exc.status_code, content=body)
+
+    @app.post("/api/v1/vision/images", response_model=VisionImageView)
+    async def analyze_image(
+        image_id: Annotated[str, Form()],
+        file: Annotated[UploadFile, File()],
+    ) -> VisionImageView:
+        content = await file.read()
+        try:
+            detections = vision.analyze(image_id, content)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "vision_unavailable", "message": str(exc)},
+            ) from exc
+        return VisionImageView(image_id=image_id, detections=detections)
 
     @app.post("/api/v1/judgements", response_model=TaskView)
     def create_judgement(alarm: Alarm) -> TaskView:

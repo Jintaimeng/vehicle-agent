@@ -1,14 +1,26 @@
 from typing import Literal
 
-from vehicle_agent.domain.models import Alarm, AlarmValidity, Driver, Evidence, RiskLevel, Vehicle
+from vehicle_agent.domain.models import (
+    Alarm,
+    AlarmValidity,
+    Detection,
+    Driver,
+    Evidence,
+    RiskLevel,
+    Vehicle,
+)
 from vehicle_agent.knowledge.graph import GraphFact
 from vehicle_agent.knowledge.index import RegulationSnippet
 
 RegulationStatus = Literal["hit", "miss", "degraded"]
 GraphStatus = Literal["hit", "miss", "degraded"]
+VisionStatus = Literal["skipped", "hit", "miss", "degraded"]
+VlmStatus = Literal["skipped", "hit", "degraded"]
 _HIT_BONUS = 0.05
 _MISS_PENALTY = 0.2
 _CONFLICT_FAULT = "camera_occlusion"
+_FATIGUE_LABELS = frozenset({"closed_eye", "yawn"})
+_VISION_CONFIDENCE = 0.6
 
 
 def score_fatigue(
@@ -22,6 +34,10 @@ def score_fatigue(
     regulation_status: RegulationStatus = "miss",
     graph_facts: list[GraphFact] | None = None,
     graph_status: GraphStatus = "miss",
+    detections: list[Detection] | None = None,
+    vision_status: VisionStatus = "skipped",
+    vlm_status: VlmStatus = "skipped",
+    visible_facts: list[str] | None = None,
 ) -> dict:
     """Deterministic risk score. The model is not allowed to override these fields."""
 
@@ -137,6 +153,41 @@ def score_fatigue(
         )
         evidence.append(Evidence(type="graph", source="vehicle_graph", description=missing_graph))
 
+    found = detections or []
+    facts = [item for item in (visible_facts or []) if item]
+    vision_conflict = False
+    if vision_status == "degraded":
+        confidence -= _MISS_PENALTY
+        evidence.append(
+            Evidence(type="vision", source="vision", description="图片检测不可用，缺少画面依据")
+        )
+    elif vision_status == "miss":
+        confidence -= _MISS_PENALTY
+        evidence.append(
+            Evidence(type="vision", source="vision", description="图片未检出目标，缺少画面依据")
+        )
+    elif vision_status == "hit":
+        evidence.extend(_vision_evidence(found, facts))
+        fatigue_hit = any(
+            item.label in _FATIGUE_LABELS and item.confidence >= _VISION_CONFIDENCE
+            for item in found
+        )
+        if fatigue_hit:
+            confidence += _HIT_BONUS
+        vision_conflict = regulation_status == "hit" and any(
+            item.label == _CONFLICT_FAULT and item.confidence >= _VISION_CONFIDENCE
+            for item in found
+        )
+        if vision_conflict:
+            confidence -= _MISS_PENALTY
+            evidence.append(
+                Evidence(
+                    type="vision",
+                    source="vision",
+                    description="法规摘录要求按疲劳驾驶处置，但画面检测到摄像头遮挡，证据冲突",
+                )
+            )
+
     risk_score = min(1.0, risk_score)
     confidence = min(0.95, max(0.0, confidence))
     if risk_score >= 0.75:
@@ -162,9 +213,27 @@ def score_fatigue(
         or driver is None
         or regulation_status != "hit"
         or graph_status != "hit"
-        or conflict,
+        or conflict
+        or vision_status in {"miss", "degraded"}
+        or vlm_status == "degraded"
+        or vision_conflict,
         "evidence": [item.model_dump() for item in evidence],
     }
+
+
+def _vision_evidence(detections: list[Detection], facts: list[str]) -> list[Evidence]:
+    suffix = f"；可见事实：{'；'.join(facts)}" if facts else ""
+    evidence: list[Evidence] = []
+    for item in detections:
+        box = ", ".join(f"{value:.2f}" for value in item.bbox)
+        evidence.append(
+            Evidence(
+                type="vision",
+                source=item.model_version,
+                description=f"{item.label} 置信度 {item.confidence:.2f}，框 [{box}]{suffix}",
+            )
+        )
+    return evidence
 
 
 def _graph_evidence(facts: list[GraphFact]) -> list[Evidence]:

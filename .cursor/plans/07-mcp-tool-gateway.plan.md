@@ -19,7 +19,7 @@ isProject: true
 
 # 07 MCP 工具网关
 
-上一阶段是已完成的混合法规检索，见 [.cursor/plans/06-hybrid-regulation-retrieval.plan.md](.cursor/plans/06-hybrid-regulation-retrieval.plan.md)。本文件是阶段 07，落地到 [.cursor/plans/07-mcp-tool-gateway.plan.md](.cursor/plans/07-mcp-tool-gateway.plan.md)。下一阶段做图片视觉时再写 `.cursor/plans/08-image-vision.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.1 节里已经存在的车辆、报警和知识查询，以及第 6 周「通过 MCP 查询、故障可重试或降级」。`vision-mcp`、`workorder-mcp`、Skill、Kafka 和前端继续留到后续。
+上一阶段是已完成的混合法规检索，见 [.cursor/plans/06-hybrid-regulation-retrieval.plan.md](.cursor/plans/06-hybrid-regulation-retrieval.plan.md)。本文件是阶段 07，落地到 [.cursor/plans/07-mcp-tool-gateway.plan.md](.cursor/plans/07-mcp-tool-gateway.plan.md)。下一阶段是 [.cursor/plans/08-image-vision.plan.md](.cursor/plans/08-image-vision.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.1 节里已经存在的车辆、报警和知识查询，以及第 6 周「通过 MCP 查询、故障可重试或降级」。`vision-mcp`、`workorder-mcp`、Skill、Kafka 和前端继续留到后续。
 
 本阶段只证明一件事：研判图里的四次工具调用可以走 MCP `tools/call`，入参和出参与现在的 Pydantic 模型一致，且不改变「代码评分、模型只写总结」。
 

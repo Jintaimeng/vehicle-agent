@@ -1,0 +1,26 @@
+{
+  "image_closed_eye": {
+    "model_version": "fixture-v1",
+    "detections": [
+      {
+        "label": "closed_eye",
+        "confidence": 0.91,
+        "bbox": [0.4, 0.2, 0.62, 0.55]
+      }
+    ]
+  },
+  "image_camera_occlusion": {
+    "model_version": "fixture-v1",
+    "detections": [
+      {
+        "label": "camera_occlusion",
+        "confidence": 0.88,
+        "bbox": [0.1, 0.1, 0.9, 0.9]
+      }
+    ]
+  },
+  "image_empty": {
+    "model_version": "fixture-v1",
+    "detections": []
+  }
+}
