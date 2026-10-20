@@ -27,6 +27,7 @@ class RegisteredTool:
         handler: Callable[[BaseModel], BaseModel],
         *,
         readonly: bool = True,
+        required_role: str = "monitor",
     ) -> None:
         self.name = name
         self.description = description
@@ -34,6 +35,7 @@ class RegisteredTool:
         self.output_model = output_model
         self.handler = handler
         self.readonly = readonly
+        self.required_role = required_role
 
 
 class ToolRegistry:
@@ -48,6 +50,9 @@ class ToolRegistry:
             return self._tools[name]
         except KeyError as exc:
             raise KeyError(f"unknown tool: {name}") from exc
+
+    def tools(self) -> list[RegisteredTool]:
+        return list(self._tools.values())
 
 
 class GetVehicleContextInput(BaseModel):
@@ -119,6 +124,7 @@ def build_vehicle_tools(
             input_model=GetVehicleContextInput,
             output_model=VehicleContextOutput,
             handler=get_vehicle_context,
+            required_role="monitor",
         )
     )
     registry.register(
@@ -128,6 +134,7 @@ def build_vehicle_tools(
             input_model=ListRecentAlarmsInput,
             output_model=AlarmHistoryOutput,
             handler=list_recent_alarms,
+            required_role="monitor",
         )
     )
 
@@ -141,6 +148,7 @@ def build_vehicle_tools(
             input_model=SearchRegulationsInput,
             output_model=SearchRegulationsOutput,
             handler=search_regulations,
+            required_role="monitor",
         )
     )
 
@@ -156,6 +164,7 @@ def build_vehicle_tools(
             input_model=QueryVehicleGraphInput,
             output_model=QueryVehicleGraphOutput,
             handler=query_vehicle_graph,
+            required_role="monitor",
         )
     )
     return registry

@@ -27,3 +27,6 @@ class Settings(BaseSettings):
     neo4j_password: str = "vehicle-agent-local"
     regulation_backend: Literal["markdown", "qdrant"] = "markdown"
     qdrant_url: str = "http://127.0.0.1:6333"
+    tool_backend: Literal["local", "mcp"] = "local"
+    mcp_transport: Literal["memory", "stdio"] = "memory"
+    mcp_role: str = "monitor"

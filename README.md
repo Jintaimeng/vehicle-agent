@@ -10,6 +10,7 @@ FastAPI
                                                                              \-> review -> report
   -> Harness: ModelAdapter + ToolRegistry + budget + trace
   -> 内存仓储 / 法规摘录（默认 Markdown，可切换 Qdrant） / 图谱关系（默认内存，可切换 Neo4j） / SQLite checkpoint
+  -> 工具默认在进程内调用，可改为 MCP 进程内传输或 stdio 子进程
 ```
 
 风险分数、风险等级和是否人工复核由代码规则计算。模型只根据已收集证据生成总结和处置建议。
@@ -22,7 +23,9 @@ FastAPI
 
 图谱查询走 `GraphIndex`。默认实现是内存中的固定关系，不依赖数据库。把 `VEHICLE_AGENT_GRAPH_BACKEND` 设为 `neo4j` 后，同一工具改为读取 Neo4j 中的相同事实。查询语句是固定 Cypher，模型只使用已经校验过的 `vehicle_id` 和 `device_id`。
 
-本阶段不包含神经网络 Embedding、YOLO、视觉大模型、MCP、Kafka 和前端。工具通过 `ToolRegistry` 注册，后续可以原样封装成 MCP Server。
+工具通过 `ToolRegistry` 注册。默认 `VEHICLE_AGENT_TOOL_BACKEND=local`，研判直接调用进程内 handler。设为 `mcp` 后，同名工具改为 MCP `tools/call`。`VEHICLE_AGENT_MCP_TRANSPORT` 默认 `memory`，在进程内走 MCP 协议；设为 `stdio` 时拉起 `python -m vehicle_agent.mcp`。调用方角色是 `VEHICLE_AGENT_MCP_ROLE`，默认 `monitor`。四个工具都是只读，可以安全重试。
+
+本阶段不包含神经网络 Embedding、YOLO、视觉大模型、视觉 MCP、工单 MCP、Kafka 和前端。
 
 ## 环境
 
@@ -112,6 +115,22 @@ docker compose -f deployments/docker-compose.yml up -d qdrant
 ```powershell
 $env:VEHICLE_AGENT_RUN_QDRANT="1"
 D:\uv_venv\Scripts\python.exe -m pytest tests/test_qdrant_acceptance.py
+```
+
+## MCP
+
+默认不启动 MCP 进程。需要独立进程时：
+
+```powershell
+$env:VEHICLE_AGENT_TOOL_BACKEND="mcp"
+$env:VEHICLE_AGENT_MCP_TRANSPORT="stdio"
+```
+
+默认测试使用进程内工具。stdio 研判验收：
+
+```powershell
+$env:VEHICLE_AGENT_RUN_MCP="1"
+D:\uv_venv\Scripts\python.exe -m pytest tests/test_mcp_acceptance.py
 ```
 
 ## 检查

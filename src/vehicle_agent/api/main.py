@@ -12,9 +12,9 @@ from vehicle_agent.graph.builder import build_graph
 from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.model import ModelAdapter, OpenAICompatibleModel
 from vehicle_agent.harness.runtime import Harness
-from vehicle_agent.harness.tools import build_vehicle_tools
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
 from vehicle_agent.knowledge.index import QdrantRegulationIndex, open_regulation_index
+from vehicle_agent.mcp.client import open_registered_tools
 from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.repositories.memory import build_seed_repository
 
@@ -40,11 +40,13 @@ def create_app(
     regulations = (
         _regulation_index(settings) if regulation_index is None else regulation_index
     )
-    tools = build_vehicle_tools(repository, regulations, index)
+    tools, mcp_session = open_registered_tools(settings, repository, regulations, index)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         yield
+        if mcp_session is not None:
+            mcp_session.close()
         _close_index(index)
         _close_index(regulations)
 
@@ -54,6 +56,7 @@ def create_app(
     app.state.graph_index = index
     app.state.regulation_index = regulations
     app.state.tools = tools
+    app.state.mcp_session = mcp_session
 
     @app.exception_handler(HTTPException)
     async def http_error(_request, exc: HTTPException) -> JSONResponse:
