@@ -27,9 +27,11 @@ FastAPI
 
 图片检测走 `VisionIndex`，由研判节点直接调用，不进入 MCP。报警可以带可选 `image_id`。没有图片时跳过检测，风险分、置信度和复核条件与之前一致。有图片时返回归一化检测框、类别和置信度，并作为 `vision` 证据。视觉复核只根据检测 JSON 写可见事实，不改风险分。`POST /api/v1/vision/images` 用同一检测器。
 
+短视频走定样本时间轴。报警可以带可选 `video_id`；同时有 `image_id` 时以视频为准。连续闭眼或打哈欠达到 2 秒、平均置信度不低于 0.6、车速不低于 60，且窗口内没有遮挡时，才把关键帧时间戳写入证据。单帧闭眼不形成事件。`POST /api/v1/vision/videos` 用同一聚合。时间轴不解码视频文件。
+
 默认 `VEHICLE_AGENT_VISION_BACKEND=fixture`，读取仓库内定样本，不解码像素。设为 `yolo` 后使用 `VEHICLE_AGENT_YOLO_WEIGHTS`（默认 `data/yolo.pt`）。YOLO 依赖 `ultralytics`，不在默认安装里。
 
-本阶段不包含神经网络 Embedding、视觉 MCP、视频抽帧、工单 MCP、Kafka 和前端。
+本阶段不包含神经网络 Embedding、视觉 MCP、目标跟踪、工单 MCP、Kafka 和前端。
 
 ## 环境
 
@@ -150,6 +152,14 @@ D:\uv_venv\Scripts\python.exe -m pytest tests/test_yolo_acceptance.py
 ```
 
 权重或图片不存在时，这条验收会跳过。默认 `pytest` 不加载 YOLO。
+
+需要 FFmpeg 抽帧验收时，准备本机 `ffmpeg` 和一条本地短视频。默认测试不调用它。
+
+```powershell
+$env:VEHICLE_AGENT_RUN_FFMPEG="1"
+$env:VEHICLE_AGENT_FFMPEG_VIDEO="data/vision-sample.mp4"
+D:\uv_venv\Scripts\python.exe -m pytest tests/test_ffmpeg_acceptance.py
+```
 
 ## 检查
 

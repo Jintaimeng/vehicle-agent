@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_base_url: str = "http://127.0.0.1:8001/v1"
     model_api_key: str = "local"
     model_name: str = "qwen"
-    prompt_version: str = "report-v4"
+    prompt_version: str = "report-v5"
     request_timeout_seconds: float = 30
     max_retries: int = 2
     max_tool_calls: int = 8

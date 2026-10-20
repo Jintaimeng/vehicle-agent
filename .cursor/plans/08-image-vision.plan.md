@@ -19,7 +19,7 @@ isProject: true
 
 # 08 图片视觉
 
-上一阶段是已完成的 MCP 工具网关，见 [.cursor/plans/07-mcp-tool-gateway.plan.md](.cursor/plans/07-mcp-tool-gateway.plan.md)。本文件是阶段 08，落地到 [.cursor/plans/08-image-vision.plan.md](.cursor/plans/08-image-vision.plan.md)。下一阶段做视频分析时再写 `.cursor/plans/09-video-analysis.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 7 周和第 16.1、16.4 节：图片检测框、类别、置信度进入证据链，视觉大模型只复核可见事实。`vision-mcp`、视频抽帧、工单、Skill、Kafka 和前端继续留到后续。
+上一阶段是已完成的 MCP 工具网关，见 [.cursor/plans/07-mcp-tool-gateway.plan.md](.cursor/plans/07-mcp-tool-gateway.plan.md)。本文件是阶段 08，落地到 [.cursor/plans/08-image-vision.plan.md](.cursor/plans/08-image-vision.plan.md)。下一阶段是 [.cursor/plans/09-video-analysis.plan.md](.cursor/plans/09-video-analysis.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 7 周和第 16.1、16.4 节：图片检测框、类别、置信度进入证据链，视觉大模型只复核可见事实。`vision-mcp`、视频抽帧、工单、Skill、Kafka 和前端继续留到后续。
 
 本阶段只证明一件事：带 `image_id` 的报警能得到检测框并写入证据，且不改变「代码评分、模型不能改风险分」。没有图片的现有报警保持阶段 01 至 07 的分数和状态。
 

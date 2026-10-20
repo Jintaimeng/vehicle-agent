@@ -52,6 +52,7 @@ def _run(
     regulations=None,
     graph=None,
     vision=None,
+    video=None,
     **settings,
 ):
     harness = Harness(
@@ -59,7 +60,9 @@ def _run(
         FakeModelAdapter(content),
         build_vehicle_tools(build_seed_repository(), regulations, graph),
     )
-    graph = build_graph(harness, open_checkpointer(tmp_path / "checkpoints.sqlite"), vision)
+    graph = build_graph(
+        harness, open_checkpointer(tmp_path / "checkpoints.sqlite"), vision, video
+    )
     config = {"configurable": {"thread_id": alarm.id}}
     graph.invoke(
         {"task_id": alarm.id, "alarm": alarm.model_dump(mode="json"), "errors": []},

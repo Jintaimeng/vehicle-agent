@@ -1,0 +1,28 @@
+{
+  "video_fatigue": {
+    "frames": [
+      {"timestamp_s": 0, "image_id": "image_closed_eye"},
+      {"timestamp_s": 1, "image_id": "image_closed_eye"},
+      {"timestamp_s": 2, "image_id": "image_closed_eye"},
+      {"timestamp_s": 3, "image_id": "image_closed_eye"}
+    ]
+  },
+  "video_blink": {
+    "frames": [
+      {"timestamp_s": 1, "image_id": "image_closed_eye"}
+    ]
+  },
+  "video_occlusion": {
+    "frames": [
+      {"timestamp_s": 0, "image_id": "image_camera_occlusion"},
+      {"timestamp_s": 1, "image_id": "image_camera_occlusion"},
+      {"timestamp_s": 2, "image_id": "image_camera_occlusion"}
+    ]
+  },
+  "video_empty": {
+    "frames": [
+      {"timestamp_s": 0, "image_id": "image_empty"},
+      {"timestamp_s": 1, "image_id": "image_empty"}
+    ]
+  }
+}

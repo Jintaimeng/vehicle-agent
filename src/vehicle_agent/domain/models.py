@@ -45,6 +45,7 @@ class Alarm(BaseModel):
     raw_confidence: float = Field(ge=0, le=1)
     status: str = "open"
     image_id: str | None = None
+    video_id: str | None = None
 
 
 class Detection(BaseModel):

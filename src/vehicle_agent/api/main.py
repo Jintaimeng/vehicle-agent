@@ -15,6 +15,7 @@ from vehicle_agent.harness.model import ModelAdapter, OpenAICompatibleModel
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
 from vehicle_agent.knowledge.index import QdrantRegulationIndex, open_regulation_index
+from vehicle_agent.knowledge.video import packaged_video_timeline
 from vehicle_agent.knowledge.vision import open_vision_index
 from vehicle_agent.mcp.client import open_registered_tools
 from vehicle_agent.repositories.base import AlarmRepository
@@ -24,6 +25,13 @@ from vehicle_agent.repositories.memory import build_seed_repository
 class VisionImageView(BaseModel):
     image_id: str
     detections: list[Detection]
+
+
+class VisionVideoView(BaseModel):
+    video_id: str
+    frame_timestamps: list[float]
+    event_formed: bool
+    keyframe_timestamp_s: float | None = None
 
 
 class TaskView(BaseModel):
@@ -43,6 +51,7 @@ def create_app(
     graph_index=None,
     regulation_index=None,
     vision_index=None,
+    video_timeline=None,
 ) -> FastAPI:
     index = _graph_index(settings) if graph_index is None else graph_index
     regulations = _regulation_index(settings) if regulation_index is None else regulation_index
@@ -51,6 +60,7 @@ def create_app(
         if vision_index is None
         else vision_index
     )
+    timeline = packaged_video_timeline(vision) if video_timeline is None else video_timeline
     tools, mcp_session = open_registered_tools(settings, repository, regulations, index)
 
     @asynccontextmanager
@@ -61,9 +71,10 @@ def create_app(
         _close_index(index)
         _close_index(regulations)
 
-    graph = build_graph(Harness(settings, model, tools), checkpointer, vision)
+    graph = build_graph(Harness(settings, model, tools), checkpointer, vision, timeline)
     app = FastAPI(title="Vehicle Guard AI", version="0.1.0", lifespan=lifespan)
     app.state.vision_index = vision
+    app.state.video_timeline = timeline
     app.state.graph = graph
     app.state.graph_index = index
     app.state.regulation_index = regulations
@@ -92,6 +103,28 @@ def create_app(
                 detail={"code": "vision_unavailable", "message": str(exc)},
             ) from exc
         return VisionImageView(image_id=image_id, detections=detections)
+
+    @app.post("/api/v1/vision/videos", response_model=VisionVideoView)
+    async def analyze_video(
+        video_id: Annotated[str, Form()],
+        file: Annotated[UploadFile, File()],
+        speed_kmh: Annotated[float, Form()] = 85,
+    ) -> VisionVideoView:
+        content = await file.read()
+        try:
+            outcome = timeline.analyze(video_id, speed_kmh, content)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "vision_unavailable", "message": str(exc)},
+            ) from exc
+        keyframe = outcome.event.keyframe_timestamp_s if outcome.event is not None else None
+        return VisionVideoView(
+            video_id=video_id,
+            frame_timestamps=[frame.timestamp_s for frame in outcome.frames],
+            event_formed=outcome.event is not None,
+            keyframe_timestamp_s=keyframe,
+        )
 
     @app.post("/api/v1/judgements", response_model=TaskView)
     def create_judgement(alarm: Alarm) -> TaskView:

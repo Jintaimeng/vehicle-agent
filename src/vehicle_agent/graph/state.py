@@ -17,6 +17,9 @@ class JudgementState(TypedDict, total=False):
     vision_status: Literal["skipped", "hit", "miss", "degraded"]
     vlm_status: Literal["skipped", "hit", "degraded"]
     visible_facts: list[str]
+    video_start_s: float
+    video_end_s: float
+    keyframe_timestamp_s: float
     risk_score: float
     risk_level: RiskLevel
     alarm_validity: AlarmValidity

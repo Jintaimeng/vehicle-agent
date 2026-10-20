@@ -38,6 +38,7 @@ def score_fatigue(
     vision_status: VisionStatus = "skipped",
     vlm_status: VlmStatus = "skipped",
     visible_facts: list[str] | None = None,
+    video_timing: tuple[float, float, float] | None = None,
 ) -> dict:
     """Deterministic risk score. The model is not allowed to override these fields."""
 
@@ -167,7 +168,7 @@ def score_fatigue(
             Evidence(type="vision", source="vision", description="图片未检出目标，缺少画面依据")
         )
     elif vision_status == "hit":
-        evidence.extend(_vision_evidence(found, facts))
+        evidence.extend(_vision_evidence(found, facts, video_timing))
         fatigue_hit = any(
             item.label in _FATIGUE_LABELS and item.confidence >= _VISION_CONFIDENCE
             for item in found
@@ -221,16 +222,25 @@ def score_fatigue(
     }
 
 
-def _vision_evidence(detections: list[Detection], facts: list[str]) -> list[Evidence]:
+def _vision_evidence(
+    detections: list[Detection],
+    facts: list[str],
+    video_timing: tuple[float, float, float] | None = None,
+) -> list[Evidence]:
     suffix = f"；可见事实：{'；'.join(facts)}" if facts else ""
+    timing = ""
+    if video_timing is not None:
+        start_s, end_s, key_s = video_timing
+        timing = f"；时段 {start_s:.2f}s-{end_s:.2f}s，关键帧 {key_s:.2f}s"
     evidence: list[Evidence] = []
     for item in detections:
         box = ", ".join(f"{value:.2f}" for value in item.bbox)
+        description = f"{item.label} 置信度 {item.confidence:.2f}，框 [{box}]{timing}{suffix}"
         evidence.append(
             Evidence(
                 type="vision",
                 source=item.model_version,
-                description=f"{item.label} 置信度 {item.confidence:.2f}，框 [{box}]{suffix}",
+                description=description,
             )
         )
     return evidence
