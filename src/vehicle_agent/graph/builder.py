@@ -1,10 +1,12 @@
+from pathlib import Path
+
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from vehicle_agent.graph.nodes import make_nodes
 from vehicle_agent.graph.state import JudgementState, Route
 from vehicle_agent.harness.runtime import Harness
-from vehicle_agent.knowledge.video import VideoTimeline, packaged_video_timeline
+from vehicle_agent.knowledge.video import VideoTimeline, open_video_timeline
 from vehicle_agent.knowledge.vision import (
     ObservationSource,
     VisionIndex,
@@ -24,7 +26,15 @@ def build_graph(
         harness.settings.vision_backend,
         weights=harness.settings.yolo_weights,
     )
-    timeline = video_timeline if video_timeline is not None else packaged_video_timeline(index)
+    timeline = (
+        video_timeline
+        if video_timeline is not None
+        else open_video_timeline(
+            harness.settings.video_backend,
+            index,
+            Path(harness.settings.vision_store_dir),
+        )
+    )
     observer = observation if observation is not None else open_observation(harness)
     nodes = make_nodes(harness, index, timeline, observer)
     graph = StateGraph(JudgementState)

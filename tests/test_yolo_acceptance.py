@@ -21,7 +21,10 @@ def test_yolo_returns_boxes_inside_allowed_labels() -> None:
     if not image.is_file():
         pytest.skip(f"sample image not found: {image}")
 
-    detections = YoloVisionIndex(str(weights)).analyze(image.stem, image.read_bytes())
+    index = YoloVisionIndex(str(weights))
+    with pytest.raises(ValueError, match="image bytes"):
+        index.analyze(image.stem, None)
+    detections = index.analyze(image.stem, image.read_bytes())
 
     assert detections
     for item in detections:

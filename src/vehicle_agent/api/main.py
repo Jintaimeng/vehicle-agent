@@ -16,8 +16,8 @@ from vehicle_agent.harness.model import ModelAdapter, OpenAICompatibleModel
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
 from vehicle_agent.knowledge.index import QdrantRegulationIndex, open_regulation_index
-from vehicle_agent.knowledge.video import packaged_video_timeline
-from vehicle_agent.knowledge.vision import open_vision_index, store_image
+from vehicle_agent.knowledge.video import open_video_timeline
+from vehicle_agent.knowledge.vision import open_vision_index, store_image, store_video
 from vehicle_agent.mcp.client import open_registered_tools
 from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.repositories.memory import build_seed_repository
@@ -61,7 +61,11 @@ def create_app(
         if vision_index is None
         else vision_index
     )
-    timeline = packaged_video_timeline(vision) if video_timeline is None else video_timeline
+    timeline = (
+        open_video_timeline(settings.video_backend, vision, Path(settings.vision_store_dir))
+        if video_timeline is None
+        else video_timeline
+    )
     tools, mcp_session = open_registered_tools(settings, repository, regulations, index)
 
     @asynccontextmanager
@@ -114,7 +118,8 @@ def create_app(
     ) -> VisionVideoView:
         content = await file.read()
         try:
-            outcome = timeline.analyze(video_id, speed_kmh, content)
+            store_video(Path(settings.vision_store_dir), video_id, content)
+            outcome = timeline.analyze(video_id, speed_kmh)
         except Exception as exc:
             raise HTTPException(
                 status_code=503,

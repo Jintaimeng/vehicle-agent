@@ -29,9 +29,11 @@ FastAPI
 
 默认 `VEHICLE_AGENT_REVIEW_BACKEND=fixture`，观察来自仓库内定样本，不调用视觉大模型。设为 `vlm` 后，研判读取已保存的关键帧，交给 `VEHICLE_AGENT_VLM_BASE_URL` 上的 `VEHICLE_AGENT_VLM_MODEL_NAME`。返回的标签走同一比较。默认测试不调用视觉大模型。
 
-短视频走定样本时间轴。报警可以带可选 `video_id`；同时有 `image_id` 时以视频为准。连续闭眼或打哈欠达到 2 秒、平均置信度不低于 0.6、车速不低于 60，且窗口内没有遮挡时，才把关键帧时间戳写入证据。单帧闭眼不形成事件。`POST /api/v1/vision/videos` 用同一聚合。时间轴不解码视频文件。
+短视频走定样本时间轴。报警可以带可选 `video_id`；同时有 `image_id` 时以视频为准。连续闭眼或打哈欠达到 2 秒、平均置信度不低于 0.6、车速不低于 60，且窗口内没有遮挡时，才把关键帧时间戳写入证据。单帧闭眼不形成事件。`POST /api/v1/vision/videos` 用同一聚合，并按 `video_id` 保存文件。默认定样本时间轴不解码视频文件。
 
-默认 `VEHICLE_AGENT_VISION_BACKEND=fixture`，读取仓库内定样本，不解码像素。设为 `yolo` 后使用 `VEHICLE_AGENT_YOLO_WEIGHTS`（默认 `data/yolo.pt`）。YOLO 依赖 `ultralytics`，不在默认安装里。
+默认 `VEHICLE_AGENT_VISION_BACKEND=fixture`，读取仓库内定样本，不解码像素。设为 `yolo` 后，研判按 `image_id` 读取 `VEHICLE_AGENT_VISION_STORE_DIR` 里已保存的图片字节，再使用 `VEHICLE_AGENT_YOLO_WEIGHTS`（默认 `data/yolo.pt`）。缺文件或空文件时进入人工复核，不改风险分。YOLO 依赖 `ultralytics`，不在默认安装里。
+
+短视频默认 `VEHICLE_AGENT_VIDEO_BACKEND=fixture`，仍读定样本时间轴，上传的文件只保存、不解码。设为 `ffmpeg` 后，研判读取已保存的视频，每秒抽出一帧 JPEG，写入同一媒体目录，再走现有连续帧聚合和画面复核。默认测试不调用 FFmpeg。
 
 本阶段不包含神经网络 Embedding、视觉 MCP、目标跟踪、工单 MCP、Kafka 和前端。
 
@@ -165,7 +167,7 @@ $env:VEHICLE_AGENT_VLM_IMAGE="data/vision-sample.jpg"
 D:\uv_venv\Scripts\python.exe -m pytest tests/test_vlm_acceptance.py
 ```
 
-需要 FFmpeg 抽帧验收时，准备本机 `ffmpeg` 和一条本地短视频。默认测试不调用它。
+需要 FFmpeg 抽帧验收时，准备本机 `ffmpeg` 和一条本地短视频。验收检查 JPEG 和时间戳间隔，并交给现有聚合。默认测试不调用它。研判里启用抽帧要另设 `VEHICLE_AGENT_VIDEO_BACKEND=ffmpeg`。
 
 ```powershell
 $env:VEHICLE_AGENT_RUN_FFMPEG="1"

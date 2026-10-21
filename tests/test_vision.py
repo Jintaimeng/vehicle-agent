@@ -348,6 +348,75 @@ def test_vlm_labels_use_the_same_comparison(tmp_path) -> None:
     assert any("不支持 closed_eye" in item["description"] for item in values["evidence"])
 
 
+class _ByteVision:
+    def __init__(self) -> None:
+        self.contents: list[bytes | None] = []
+
+    def analyze(self, image_id: str, content: bytes | None = None) -> list[Detection]:
+        del image_id
+        self.contents.append(content)
+        if not content:
+            return []
+        return [
+            Detection(
+                label="closed_eye",
+                confidence=0.91,
+                bbox=(0.4, 0.2, 0.62, 0.55),
+                model_version="bytes-v1",
+            )
+        ]
+
+
+def test_yolo_backend_passes_stored_image_bytes(tmp_path) -> None:
+    store = tmp_path / "vision"
+    store_image(store, "image_closed_eye", b"frame-bytes")
+    detector = _ByteVision()
+    _, values = _run(
+        tmp_path,
+        _high_alarm(id="alarm_bytes", image_id="image_closed_eye"),
+        vision=detector,
+        vision_backend="yolo",
+        vision_store_dir=str(store),
+    )
+
+    visual = [item for item in values["result"]["evidence"] if item["type"] == "vision"]
+    assert detector.contents == [b"frame-bytes"]
+    assert values["status"] == "completed"
+    assert values["vision_status"] == "hit"
+    assert values["vision_agreement"] == "match"
+    assert values["risk_score"] == 1.0
+    assert "画面观察支持 closed_eye" in visual[0]["description"]
+
+
+def test_missing_or_empty_stored_image_degrades(tmp_path) -> None:
+    missing = tmp_path / "missing"
+    _, absent = _run(
+        tmp_path,
+        _high_alarm(id="alarm_absent", image_id="image_closed_eye"),
+        vision=_ByteVision(),
+        vision_backend="yolo",
+        vision_store_dir=str(missing),
+    )
+    empty = tmp_path / "empty"
+    store_image(empty, "image_closed_eye", b"")
+    _, blank = _run(
+        tmp_path,
+        _high_alarm(id="alarm_blank", image_id="image_closed_eye"),
+        vision=_ByteVision(),
+        vision_backend="yolo",
+        vision_store_dir=str(empty),
+    )
+
+    assert absent["status"] == "awaiting_review"
+    assert absent["vision_status"] == "degraded"
+    assert absent["errors"][-1]["code"] == "vision_unavailable"
+    assert "result" not in absent
+    assert blank["status"] == "awaiting_review"
+    assert blank["vision_status"] == "degraded"
+    assert "stored image empty" in blank["errors"][-1]["message"]
+    assert "result" not in blank
+
+
 def test_vlm_http_failure_keeps_detections(tmp_path) -> None:
     store = tmp_path / "vision"
     store_image(store, "image_closed_eye", b"frame-bytes")

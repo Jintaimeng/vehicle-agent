@@ -4,22 +4,22 @@ overview: 阶段 10 用独立的关键帧画面观察核对检测类别。定样
 todos:
   - id: observation-catalog
     content: 增加与检测分开的画面观察目录，含一致、遮挡和闭眼不一致样本
-    status: pending
+    status: completed
   - id: compare-review
     content: vision 节点改为按 image_id 读取观察并用代码比较类别，不再调用文本模型
-    status: pending
+    status: completed
   - id: vlm-keyframe
     content: 视觉大模型读取已保存关键帧，输出七类标签并进入同一比较；默认测试不调用
-    status: pending
+    status: completed
   - id: score-and-tests
     content: 不一致时进入复核且不改 risk_score；更新测试、README 和阶段 09 指向
-    status: pending
+    status: completed
 isProject: false
 ---
 
 # 10 关键帧画面复核
 
-上一阶段是已完成的视频分析，见 [.cursor/plans/09-video-analysis.plan.md](.cursor/plans/09-video-analysis.plan.md)。本文件是阶段 10，落地到 [.cursor/plans/10-keyframe-visual-review.plan.md](.cursor/plans/10-keyframe-visual-review.plan.md)。下一阶段接入真实媒体时再写 `.cursor/plans/11-real-media-vision.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 16.4 节：复核描述关键帧里看得见的类别，且不能覆盖检测和业务数据。第 18 节的文本侧微调保持省略。
+上一阶段是已完成的视频分析，见 [.cursor/plans/09-video-analysis.plan.md](.cursor/plans/09-video-analysis.plan.md)。本文件是阶段 10，落地到 [.cursor/plans/10-keyframe-visual-review.plan.md](.cursor/plans/10-keyframe-visual-review.plan.md)。下一阶段是 [.cursor/plans/11-real-media-vision.plan.md](.cursor/plans/11-real-media-vision.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 16.4 节：复核描述关键帧里看得见的类别，且不能覆盖检测和业务数据。第 18 节的文本侧微调保持省略。
 
 本阶段只证明一件事：已有检测结果时，复核得到一份与检测框分开的画面观察；观察不支持检测类别时进入人工复核，两边证据都保留，且不改变「代码评分、模型不能改风险分」。观察有两个来源，比较函数只有一个。默认定样本按 `image_id` 查表。复核后端为 `vlm` 时，视觉大模型看已保存的关键帧图片，输出同一套标签后再比较。没有图片或视频的报警保持阶段 01 至 09 的分数和状态。
 

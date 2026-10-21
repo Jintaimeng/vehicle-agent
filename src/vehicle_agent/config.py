@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     mcp_transport: Literal["memory", "stdio"] = "memory"
     mcp_role: str = "monitor"
     vision_backend: Literal["fixture", "yolo"] = "fixture"
+    video_backend: Literal["fixture", "ffmpeg"] = "fixture"
     yolo_weights: str = "data/yolo.pt"
     review_backend: Literal["fixture", "vlm"] = "fixture"
     vision_store_dir: str = "data/vision"

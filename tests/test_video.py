@@ -7,7 +7,13 @@ from vehicle_agent.config import Settings
 from vehicle_agent.domain.models import Detection
 from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.model import FakeModelAdapter
-from vehicle_agent.knowledge.video import VideoFrame, aggregate_frames, packaged_video_timeline
+from vehicle_agent.knowledge.video import (
+    FfmpegVideoTimeline,
+    VideoFrame,
+    aggregate_frames,
+    packaged_video_timeline,
+)
+from vehicle_agent.knowledge.vision import store_video
 from vehicle_agent.repositories.memory import build_seed_repository
 
 
@@ -118,7 +124,11 @@ def test_timeline_failure_degrades_to_review(tmp_path) -> None:
 
 def test_upload_returns_keyframe_timestamp(tmp_path) -> None:
     app = create_app(
-        Settings(max_retries=1, checkpoint_path=str(tmp_path / "checkpoints.sqlite")),
+        Settings(
+            max_retries=1,
+            checkpoint_path=str(tmp_path / "checkpoints.sqlite"),
+            vision_store_dir=str(tmp_path / "vision"),
+        ),
         build_seed_repository(),
         FakeModelAdapter(REPORT),
         open_checkpointer(tmp_path / "checkpoints.sqlite"),
@@ -134,6 +144,7 @@ def test_upload_returns_keyframe_timestamp(tmp_path) -> None:
     assert body["frame_timestamps"] == [0, 1, 2, 3]
     assert body["event_formed"] is True
     assert body["keyframe_timestamp_s"] == 0
+    assert (tmp_path / "vision" / "video_fatigue").read_bytes() == b"not-a-real-video"
 
 
 def test_low_speed_and_poor_face_do_not_form_event() -> None:
@@ -159,3 +170,64 @@ def test_packaged_timeline_reuses_image_detections() -> None:
 def test_alarm_accepts_optional_video_id() -> None:
     assert _alarm(video_id="video_fatigue").video_id == "video_fatigue"
     assert _alarm().video_id is None
+
+
+class _JpegVision:
+    def __init__(self) -> None:
+        self.contents: list[bytes | None] = []
+
+    def analyze(self, image_id: str, content: bytes | None = None) -> list[Detection]:
+        del image_id
+        self.contents.append(content)
+        if not content:
+            return []
+        return [_detection("closed_eye")]
+
+
+def test_injected_frames_form_an_event_and_store_jpegs(tmp_path) -> None:
+    store = tmp_path / "vision"
+    store_video(store, "clip", b"video-bytes")
+    detector = _JpegVision()
+
+    def extract(path):
+        assert path.read_bytes() == b"video-bytes"
+        return [(0.0, b"jpeg-0"), (1.0, b"jpeg-1"), (2.0, b"jpeg-2")]
+
+    outcome = FfmpegVideoTimeline(detector, store, extract).analyze("clip", 85)
+
+    assert outcome.event is not None
+    assert outcome.event.start_s == 0
+    assert outcome.event.end_s == 2
+    assert outcome.event.keyframe_image_id == "clip__0"
+    assert detector.contents == [b"jpeg-0", b"jpeg-1", b"jpeg-2"]
+    assert (store / "clip__0").read_bytes() == b"jpeg-0"
+    assert (store / "clip__2").read_bytes() == b"jpeg-2"
+
+
+def test_single_extracted_frame_does_not_form_event(tmp_path) -> None:
+    store = tmp_path / "vision"
+    store_video(store, "blink", b"video-bytes")
+    outcome = FfmpegVideoTimeline(
+        _JpegVision(),
+        store,
+        lambda path: [(0.0, b"jpeg-0")],
+    ).analyze("blink", 85)
+
+    assert outcome.event is None
+    assert outcome.frames[0].image_id == "blink__0"
+    assert (store / "blink__0").read_bytes() == b"jpeg-0"
+
+
+def test_missing_stored_video_degrades_to_review(tmp_path) -> None:
+    _, values = _run(
+        tmp_path,
+        _steady(id="alarm_missing_video", video_id="clip"),
+        video_backend="ffmpeg",
+        vision_store_dir=str(tmp_path / "vision"),
+    )
+
+    assert values["status"] == "awaiting_review"
+    assert values["vision_status"] == "degraded"
+    assert values["errors"][-1]["code"] == "vision_unavailable"
+    assert "stored video missing" in values["errors"][-1]["message"]
+    assert "result" not in values

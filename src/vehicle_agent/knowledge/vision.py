@@ -219,6 +219,19 @@ def store_image(directory: Path, image_id: str, content: bytes) -> None:
     path.write_bytes(content)
 
 
+def store_video(directory: Path, video_id: str, content: bytes) -> None:
+    path = image_file(directory, video_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+
+
+def read_stored_video(directory: Path, video_id: str) -> Path:
+    path = image_file(directory, video_id)
+    if not path.is_file():
+        raise FileNotFoundError(f"stored video missing: {video_id}")
+    return path
+
+
 def read_stored_image(directory: Path, image_id: str) -> bytes:
     path = image_file(directory, image_id)
     if not path.is_file():

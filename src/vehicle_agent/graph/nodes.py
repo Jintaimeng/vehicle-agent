@@ -1,5 +1,6 @@
 import json
 from collections.abc import Callable
+from pathlib import Path
 
 from langgraph.types import interrupt
 from pydantic import BaseModel, ValidationError
@@ -19,7 +20,12 @@ from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import GraphFact
 from vehicle_agent.knowledge.index import RegulationSnippet
 from vehicle_agent.knowledge.video import VideoTimeline
-from vehicle_agent.knowledge.vision import ObservationSource, VisionIndex, compare_observation
+from vehicle_agent.knowledge.vision import (
+    ObservationSource,
+    VisionIndex,
+    compare_observation,
+    read_stored_image,
+)
 
 
 class ReportDraft(BaseModel):
@@ -34,6 +40,7 @@ def make_nodes(
     observation: ObservationSource,
 ) -> dict[str, Callable[[JudgementState], dict]]:
     settings = harness.settings
+    media_store = Path(settings.vision_store_dir)
 
     def traced(update: dict) -> dict:
         update["trace"] = [event.model_dump() for event in harness.tracer.events]
@@ -122,7 +129,7 @@ def make_nodes(
         if not alarm.image_id:
             return traced(_empty_vision("skipped"))
         try:
-            detections = vision_index.analyze(alarm.image_id)
+            detections = _detect_image(alarm.image_id)
         except Exception as exc:
             return traced(_degraded_vision(state, exc))
         if not detections:
@@ -149,6 +156,14 @@ def make_nodes(
                 (start, end, key),
             )
         return traced(_empty_vision("miss"))
+
+    def _detect_image(image_id: str) -> list:
+        if settings.vision_backend != "yolo":
+            return vision_index.analyze(image_id)
+        content = read_stored_image(media_store, image_id)
+        if not content:
+            raise ValueError(f"stored image empty: {image_id}")
+        return vision_index.analyze(image_id, content)
 
     def _review_detections(state, image_id: str, detections: list, timing) -> dict:
         payload = [item.model_dump() for item in detections]

@@ -1,13 +1,20 @@
 import json
 import re
 import subprocess
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
 
 from vehicle_agent.domain.models import Detection
-from vehicle_agent.knowledge.vision import VisionIndex, packaged_vision_index
+from vehicle_agent.knowledge.vision import (
+    VisionIndex,
+    packaged_vision_index,
+    read_stored_video,
+    store_image,
+)
 
 MIN_DURATION_S = 2.0
 MAX_GAP_S = 1.5
@@ -100,6 +107,90 @@ class FixtureVideoTimeline:
 def packaged_video_timeline(vision: VisionIndex | None = None) -> FixtureVideoTimeline:
     root = Path(__file__).resolve().parent / "video_fixtures" / "catalog.json"
     return FixtureVideoTimeline.from_file(root, vision or packaged_vision_index())
+
+
+VideoBackend = Literal["fixture", "ffmpeg"]
+FrameExtractor = Callable[[Path], list[tuple[float, bytes]]]
+
+
+class FfmpegVideoTimeline:
+    """One JPEG per second from a stored video, then the existing frame aggregator."""
+
+    def __init__(
+        self,
+        vision: VisionIndex,
+        store: Path,
+        extract: FrameExtractor | None = None,
+    ) -> None:
+        self._vision = vision
+        self._store = store
+        self._extract = ffmpeg_extract_frames if extract is None else extract
+
+    def analyze(
+        self, video_id: str, speed_kmh: float, content: bytes | None = None
+    ) -> VideoOutcome:
+        del content
+        path = read_stored_video(self._store, video_id)
+        extracted = self._extract(path)
+        if not extracted:
+            raise RuntimeError(f"ffmpeg produced no frames: {video_id}")
+        frames: list[VideoFrame] = []
+        for index, (timestamp, jpeg) in enumerate(extracted):
+            image_id = f"{video_id}__{index}"
+            store_image(self._store, image_id, jpeg)
+            frames.append(
+                VideoFrame(
+                    timestamp_s=timestamp,
+                    image_id=image_id,
+                    detections=self._vision.analyze(image_id, jpeg),
+                )
+            )
+        return aggregate_frames(frames, speed_kmh)
+
+
+def open_video_timeline(
+    backend: VideoBackend, vision: VisionIndex, store: Path
+) -> VideoTimeline:
+    if backend == "fixture":
+        return packaged_video_timeline(vision)
+    if backend == "ffmpeg":
+        return FfmpegVideoTimeline(vision, store)
+    raise ValueError(f"unsupported video backend: {backend}")
+
+
+def ffmpeg_extract_frames(path: Path) -> list[tuple[float, bytes]]:
+    """Sample about one JPEG per second and return pts_time with file bytes."""
+
+    with tempfile.TemporaryDirectory() as directory:
+        pattern = str(Path(directory) / "frame_%04d.jpg")
+        try:
+            completed = subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-i",
+                    str(path),
+                    "-vf",
+                    "fps=1,showinfo",
+                    pattern,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            raise FileNotFoundError("ffmpeg is not installed") from exc
+        times = [float(item) for item in _PTS_TIME.findall(completed.stderr)]
+        frames = sorted(Path(directory).glob("frame_*.jpg"))
+        if not frames:
+            message = completed.stderr.strip() or "ffmpeg produced no frames"
+            raise RuntimeError(message)
+        if len(frames) != len(times):
+            raise RuntimeError("ffmpeg frame timestamps do not match images")
+        return [
+            (timestamp, frame.read_bytes())
+            for timestamp, frame in zip(times, frames, strict=True)
+        ]
 
 
 def ffmpeg_sample_timestamps(path: Path) -> list[float]:
