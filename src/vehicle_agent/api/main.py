@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
@@ -16,7 +17,7 @@ from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
 from vehicle_agent.knowledge.index import QdrantRegulationIndex, open_regulation_index
 from vehicle_agent.knowledge.video import packaged_video_timeline
-from vehicle_agent.knowledge.vision import open_vision_index
+from vehicle_agent.knowledge.vision import open_vision_index, store_image
 from vehicle_agent.mcp.client import open_registered_tools
 from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.repositories.memory import build_seed_repository
@@ -96,6 +97,7 @@ def create_app(
     ) -> VisionImageView:
         content = await file.read()
         try:
+            store_image(Path(settings.vision_store_dir), image_id, content)
             detections = vision.analyze(image_id, content)
         except Exception as exc:
             raise HTTPException(

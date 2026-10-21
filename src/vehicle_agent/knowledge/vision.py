@@ -1,7 +1,10 @@
+import base64
 import json
 import tempfile
 from pathlib import Path
 from typing import Literal, Protocol
+
+from pydantic import BaseModel, field_validator
 
 from vehicle_agent.domain.models import Detection, VisionLabel
 
@@ -106,6 +109,179 @@ class YoloVisionIndex:
             raise FileNotFoundError(f"YOLO weights not found: {weights}")
         self._model = YOLO(str(weights))
         return self._model
+
+
+class ObservationUnavailable(Exception):
+    """The observation source could not read this image."""
+
+
+class ObservationSource(Protocol):
+    def observe(self, image_id: str, *, task_id: str) -> list[VisionLabel]: ...
+
+
+class FixtureObservationIndex:
+    """Hand-written labels stored apart from detector samples."""
+
+    def __init__(self, samples: dict[str, list[VisionLabel]]) -> None:
+        self._samples = samples
+
+    @classmethod
+    def from_file(cls, path: Path) -> "FixtureObservationIndex":
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        samples: dict[str, list[VisionLabel]] = {}
+        for image_id, labels in payload.items():
+            samples[image_id] = [_require_label(item) for item in labels]
+        return cls(samples)
+
+    def observe(self, image_id: str, *, task_id: str) -> list[VisionLabel]:
+        del task_id
+        try:
+            return list(self._samples[image_id])
+        except KeyError as exc:
+            raise ObservationUnavailable(f"observation missing: {image_id}") from exc
+
+
+def packaged_observations() -> FixtureObservationIndex:
+    root = Path(__file__).resolve().parent / "vision_fixtures" / "observations.json"
+    return FixtureObservationIndex.from_file(root)
+
+
+class VisionLabelResult(BaseModel):
+    labels: list[VisionLabel]
+
+    @field_validator("labels", mode="before")
+    @classmethod
+    def keep_allowed(cls, value: object) -> list[str]:
+        if not isinstance(value, list):
+            raise ValueError("labels must be a list")
+        mapped: list[str] = []
+        for item in value:
+            label = map_vision_label(str(item))
+            if label is None or label in mapped:
+                continue
+            mapped.append(label)
+        if value and not mapped:
+            raise ValueError("no allowed vision label")
+        return mapped
+
+
+class VlmObservation:
+    """Asks a vision model for the same label list the fixture catalog stores."""
+
+    def __init__(self, harness, store: Path) -> None:
+        self._harness = harness
+        self._store = store
+
+    def observe(self, image_id: str, *, task_id: str) -> list[VisionLabel]:
+        content = read_stored_image(self._store, image_id)
+        parsed = self._harness.complete_structured(
+            _vlm_messages(image_id, content),
+            VisionLabelResult,
+            task_id=task_id,
+            node="vision",
+            model_name=self._harness.settings.vlm_model_name,
+            endpoint="vision",
+            note_from=lambda item: _review_note(
+                image_id, self._harness.settings.prompt_version, item
+            ),
+        )
+        return list(parsed.labels)
+
+
+def compare_observation(
+    detections: list[Detection], labels: list[VisionLabel]
+) -> tuple[Literal["match", "conflict"], list[str]]:
+    """Check whether every strong detection label is present in the observation."""
+
+    strong: list[VisionLabel] = []
+    for item in detections:
+        if item.confidence >= 0.6 and item.label not in strong:
+            strong.append(item.label)
+    observed = set(labels)
+    unsupported = [label for label in strong if label not in observed]
+    extra = [label for label in labels if label not in strong]
+    facts: list[str] = []
+    if unsupported:
+        facts.append(f"检测类别 {', '.join(strong)}，画面观察不支持 {', '.join(unsupported)}")
+        agreement: Literal["match", "conflict"] = "conflict"
+    else:
+        supported = ", ".join(strong) if strong else "无"
+        facts.append(f"画面观察支持 {supported}")
+        agreement = "match"
+    if extra:
+        facts.append(f"画面观察另见 {', '.join(extra)}")
+    return agreement, facts
+
+
+def store_image(directory: Path, image_id: str, content: bytes) -> None:
+    path = image_file(directory, image_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+
+
+def read_stored_image(directory: Path, image_id: str) -> bytes:
+    path = image_file(directory, image_id)
+    if not path.is_file():
+        raise ObservationUnavailable(f"stored image missing: {image_id}")
+    return path.read_bytes()
+
+
+def image_file(directory: Path, image_id: str) -> Path:
+    if not image_id or image_id != Path(image_id).name or image_id in {".", ".."}:
+        raise ValueError("invalid image_id")
+    return directory / image_id
+
+
+def open_observation(harness, store: Path | None = None):
+    if harness.settings.review_backend == "fixture":
+        return packaged_observations()
+    if harness.settings.review_backend == "vlm":
+        return VlmObservation(harness, store or Path(harness.settings.vision_store_dir))
+    raise ValueError(f"unsupported review backend: {harness.settings.review_backend}")
+
+
+def _require_label(value: str) -> VisionLabel:
+    label = map_vision_label(value)
+    if label is None:
+        raise ValueError(f"unsupported observation label: {value}")
+    return label
+
+
+def _review_note(image_id: str, prompt_version: str, parsed: VisionLabelResult) -> str:
+    return json.dumps(
+        {
+            "image_id": image_id,
+            "prompt_version": prompt_version,
+            "labels": parsed.labels,
+        },
+        ensure_ascii=False,
+    )
+
+
+def _vlm_messages(image_id: str, content: bytes) -> list[dict]:
+    encoded = base64.b64encode(content).decode("ascii")
+    return [
+        {
+            "role": "system",
+            "content": (
+                "你是画面复核助手。只根据图像列出看得见的类别。"
+                "输出 JSON 对象，字段为 labels。"
+                "类别只能是 driver、mobile_phone、seat_belt、closed_eye、"
+                "yawn、smoking、camera_occlusion。"
+                "不要推测身份，不要输出检测框或风险分。"
+            ),
+        },
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": image_id},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{encoded}"},
+                },
+            ],
+        },
+    ]
 
 
 def open_vision_index(backend: VisionBackend, *, weights: str) -> VisionIndex:

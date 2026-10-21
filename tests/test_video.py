@@ -67,7 +67,7 @@ def test_continuous_closed_eye_records_keyframe(tmp_path) -> None:
     assert values["risk_score"] == 1.0
     assert "时段 0.00s-3.00s" in visual[0]["description"]
     assert "关键帧 0.00s" in visual[0]["description"]
-    assert "可见事实：驾驶员持续闭眼" in visual[0]["description"]
+    assert "可见事实：画面观察支持 closed_eye" in visual[0]["description"]
 
 
 def test_single_blink_does_not_form_event(tmp_path) -> None:

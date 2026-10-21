@@ -16,7 +16,7 @@ isProject: true
 
 # 09 视频分析
 
-上一阶段是已完成的图片视觉，见 [.cursor/plans/08-image-vision.plan.md](.cursor/plans/08-image-vision.plan.md)。本文件是阶段 09，落地到 [.cursor/plans/09-video-analysis.plan.md](.cursor/plans/09-video-analysis.plan.md)。下一阶段做微调实验时再写 `.cursor/plans/10-lora-experiment.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 8 周和第 16.2、16.3、16.4 节：抽帧、连续帧聚合、关键帧，以及报告可引用时间戳。`vision-mcp`、目标跟踪、工单、Skill、Kafka 和前端继续留到后续。
+上一阶段是已完成的图片视觉，见 [.cursor/plans/08-image-vision.plan.md](.cursor/plans/08-image-vision.plan.md)。本文件是阶段 09，落地到 [.cursor/plans/09-video-analysis.plan.md](.cursor/plans/09-video-analysis.plan.md)。下一阶段是 [.cursor/plans/10-keyframe-visual-review.plan.md](.cursor/plans/10-keyframe-visual-review.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 8 周和第 16.2、16.3、16.4 节：抽帧、连续帧聚合、关键帧，以及报告可引用时间戳。`vision-mcp`、目标跟踪、工单、Skill、Kafka 和前端继续留到后续。
 
 本阶段只证明一件事：带 `video_id` 的短视频能定位一段风险时间，并把关键帧时间戳写入证据，且不改变「代码评分、模型不能改风险分」。没有 `video_id` 的报警，包括阶段 08 的单张图片，保持现在的分数和状态。
 

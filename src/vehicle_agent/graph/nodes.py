@@ -19,7 +19,7 @@ from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import GraphFact
 from vehicle_agent.knowledge.index import RegulationSnippet
 from vehicle_agent.knowledge.video import VideoTimeline
-from vehicle_agent.knowledge.vision import VisionIndex
+from vehicle_agent.knowledge.vision import ObservationSource, VisionIndex, compare_observation
 
 
 class ReportDraft(BaseModel):
@@ -27,12 +27,11 @@ class ReportDraft(BaseModel):
     recommendations: list[str]
 
 
-class VisionReview(BaseModel):
-    visible_facts: list[str]
-
-
 def make_nodes(
-    harness: Harness, vision_index: VisionIndex, video_timeline: VideoTimeline
+    harness: Harness,
+    vision_index: VisionIndex,
+    video_timeline: VideoTimeline,
+    observation: ObservationSource,
 ) -> dict[str, Callable[[JudgementState], dict]]:
     settings = harness.settings
 
@@ -155,14 +154,11 @@ def make_nodes(
         payload = [item.model_dump() for item in detections]
         timing_state = _timing_state(timing)
         try:
-            review = harness.complete_structured(
-                _vision_messages(image_id, payload),
-                VisionReview,
-                task_id=state["task_id"],
-                node="vision",
-            )
-        except HarnessError as exc:
-            errors = [*state.get("errors", []), {"code": exc.code, "message": str(exc)}]
+            labels = observation.observe(image_id, task_id=state["task_id"])
+            agreement, facts = compare_observation(detections, labels)
+        except Exception as exc:
+            code = exc.code if isinstance(exc, HarnessError) else "vision_unavailable"
+            errors = [*state.get("errors", []), {"code": code, "message": str(exc)}]
             return traced(
                 {
                     "detections": payload,
@@ -178,7 +174,8 @@ def make_nodes(
                 "detections": payload,
                 "vision_status": "hit",
                 "vlm_status": "hit",
-                "visible_facts": review.visible_facts,
+                "visible_facts": facts,
+                "vision_agreement": agreement,
                 **timing_state,
             }
         )
@@ -212,6 +209,7 @@ def make_nodes(
             vlm_status=state.get("vlm_status", "skipped"),
             visible_facts=state.get("visible_facts", []),
             video_timing=_stored_timing(state),
+            vision_agreement=state.get("vision_agreement"),
         )
         status = "awaiting_review" if scored["requires_human_review"] else "ready_to_report"
         return traced({**scored, "status": status})
@@ -241,6 +239,7 @@ def make_nodes(
                     "没有 graph 证据时，不要编造车辆、驾驶员、设备或故障关系。"
                     "没有 vision 证据时，不要编造检测框或画面事实。"
                     "可以引用证据里的关键帧时间戳，不要编造证据中没有的时间。"
+                    "画面是否支持检测类别以证据中的观察结论为准，不要改写。"
                 ),
             },
             {
@@ -331,23 +330,3 @@ def _occlusion_time(frames, detection) -> float:
         if detection in frame.detections:
             return frame.timestamp_s
     return frames[0].timestamp_s
-
-
-def _vision_messages(image_id: str, detections: list[dict]) -> list[dict[str, str]]:
-    return [
-        {
-            "role": "system",
-            "content": (
-                "你是画面复核助手。只根据给定检测框描述可见事实。"
-                "输出 JSON 对象，字段为 visible_facts。"
-                "不要推测身份，不要修改检测类别、置信度或风险分。"
-            ),
-        },
-        {
-            "role": "user",
-            "content": json.dumps(
-                {"image_id": image_id, "detections": detections},
-                ensure_ascii=False,
-            ),
-        },
-    ]

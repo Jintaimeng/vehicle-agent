@@ -1,8 +1,9 @@
 import json
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -112,20 +113,26 @@ class Harness:
 
     def complete_structured(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         schema: type[OutputT],
         *,
         task_id: str,
         node: str,
+        model_name: str | None = None,
+        endpoint: str = "text",
+        note_from: Callable[[OutputT], str] | None = None,
     ) -> OutputT:
+        used_model = model_name or self.settings.model_name
+
         def operation() -> OutputT:
             self.budget.ensure_model_call()
             self.budget.model_calls += 1
             started = time.perf_counter()
             response = self.model.complete(
                 messages,
-                model=self.settings.model_name,
+                model=used_model,
                 timeout=self.settings.request_timeout_seconds,
+                endpoint=endpoint,
             )
             self.budget.tokens += response.total_tokens
             if self.budget.tokens > self.budget.max_tokens:
@@ -134,15 +141,17 @@ class Harness:
                 parsed = schema.model_validate(_parse_json_object(response.content))
             except (OutputValidationError, ValidationError) as exc:
                 raise OutputValidationError("model output does not match schema") from exc
+            note = note_from(parsed) if note_from else None
             self._record(
                 task_id,
                 node,
                 "model",
-                self.settings.model_name,
+                used_model,
                 (time.perf_counter() - started) * 1000,
                 "ok",
                 None,
                 tokens=response.total_tokens,
+                note=note,
             )
             return parsed
 
@@ -153,7 +162,7 @@ class Harness:
                 task_id,
                 node,
                 "model",
-                self.settings.model_name,
+                used_model,
                 0,
                 "error",
                 exc.code,
@@ -180,6 +189,7 @@ class Harness:
         status: str,
         error_code: str | None,
         tokens: int | None = None,
+        note: str | None = None,
     ) -> None:
         self.tracer.record(
             TraceEvent(
@@ -191,6 +201,7 @@ class Harness:
                 status=status,
                 error_code=error_code,
                 tokens=tokens,
+                note=note,
             )
         )
 

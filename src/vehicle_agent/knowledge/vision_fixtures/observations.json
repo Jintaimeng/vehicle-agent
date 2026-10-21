@@ -1,0 +1,5 @@
+{
+  "image_closed_eye": ["closed_eye"],
+  "image_camera_occlusion": ["camera_occlusion"],
+  "image_closed_eye_mismatch": ["driver"]
+}

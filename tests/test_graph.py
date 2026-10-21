@@ -53,6 +53,7 @@ def _run(
     graph=None,
     vision=None,
     video=None,
+    observation=None,
     **settings,
 ):
     harness = Harness(
@@ -61,7 +62,11 @@ def _run(
         build_vehicle_tools(build_seed_repository(), regulations, graph),
     )
     graph = build_graph(
-        harness, open_checkpointer(tmp_path / "checkpoints.sqlite"), vision, video
+        harness,
+        open_checkpointer(tmp_path / "checkpoints.sqlite"),
+        vision,
+        video,
+        observation,
     )
     config = {"configurable": {"thread_id": alarm.id}}
     graph.invoke(

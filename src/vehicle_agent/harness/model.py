@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Protocol
+from typing import Any, Protocol
 
 import httpx
 from pydantic import BaseModel, Field
@@ -17,33 +17,46 @@ class ModelResponse(BaseModel):
 class ModelAdapter(Protocol):
     def complete(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         model: str,
         timeout: float,
+        endpoint: str = "text",
     ) -> ModelResponse: ...
 
 
 class OpenAICompatibleModel:
     """Calls an OpenAI-compatible /chat/completions endpoint."""
 
-    def __init__(self, settings: Settings, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        client: httpx.Client | None = None,
+        vision_client: httpx.Client | None = None,
+    ) -> None:
         self._settings = settings
         self._client = client or httpx.Client(
             base_url=settings.model_base_url.rstrip("/") + "/",
             headers={"Authorization": f"Bearer {settings.model_api_key}"},
             timeout=settings.request_timeout_seconds,
         )
+        self._vision_client = vision_client or httpx.Client(
+            base_url=settings.vlm_base_url.rstrip("/") + "/",
+            headers={"Authorization": f"Bearer {settings.vlm_api_key}"},
+            timeout=settings.request_timeout_seconds,
+        )
 
     def complete(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         model: str,
         timeout: float,
+        endpoint: str = "text",
     ) -> ModelResponse:
+        client = self._vision_client if endpoint == "vision" else self._client
         try:
-            response = self._client.post(
+            response = client.post(
                 "chat/completions",
                 json={
                     "model": model,
@@ -73,7 +86,7 @@ class FakeModelAdapter:
 
     def __init__(
         self,
-        content: str | Callable[[list[dict[str, str]]], str] = (
+        content: str | Callable[[list[dict[str, Any]]], str] = (
             '{"summary":"ok","recommendations":[]}'
         ),
         *,
@@ -85,11 +98,13 @@ class FakeModelAdapter:
 
     def complete(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         model: str,
         timeout: float,
+        endpoint: str = "text",
     ) -> ModelResponse:
+        del endpoint
         self.calls += 1
         content = self._content(messages) if callable(self._content) else self._content
         return ModelResponse(content=content, total_tokens=self._tokens, model=model)

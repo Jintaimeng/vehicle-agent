@@ -1,16 +1,21 @@
 import json
 
+import httpx
 from fastapi.testclient import TestClient
 
 from test_graph import REPORT, _alarm, _run
 from vehicle_agent.api.main import create_app
 from vehicle_agent.config import Settings
 from vehicle_agent.domain.models import Detection
+from vehicle_agent.graph.builder import build_graph
 from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.graph.scoring import score_fatigue
-from vehicle_agent.harness.model import FakeModelAdapter
+from vehicle_agent.harness.model import FakeModelAdapter, OpenAICompatibleModel
+from vehicle_agent.harness.runtime import Harness
+from vehicle_agent.harness.tools import build_vehicle_tools
 from vehicle_agent.knowledge.graph import graph_fact
 from vehicle_agent.knowledge.index import RegulationSnippet
+from vehicle_agent.knowledge.vision import store_image
 from vehicle_agent.repositories.memory import build_seed_repository
 
 
@@ -63,26 +68,25 @@ def test_closed_eye_detection_enters_evidence(tmp_path) -> None:
     assert visual[0]["source"] == "fixture-v1"
     assert "closed_eye" in visual[0]["description"]
     assert "[0.40, 0.20, 0.62, 0.55]" in visual[0]["description"]
-    assert "可见事实：驾驶员闭眼" in visual[0]["description"]
+    assert "可见事实：画面观察支持 closed_eye" in visual[0]["description"]
 
 
 def test_visible_facts_do_not_change_score(tmp_path) -> None:
-    _, closed = _run(
+    _, matched = _run(
         tmp_path,
         _high_alarm(id="alarm_closed", image_id="image_closed_eye"),
-        content=_vision_model("驾驶员闭眼"),
     )
-    _, yawned = _run(
+    _, mismatched = _run(
         tmp_path,
-        _high_alarm(id="alarm_yawn", image_id="image_closed_eye"),
-        content=_vision_model("驾驶员打哈欠"),
+        _high_alarm(id="alarm_mismatch", image_id="image_closed_eye_mismatch"),
     )
 
-    assert closed["risk_score"] == yawned["risk_score"] == 1.0
-    assert closed["risk_level"] == yawned["risk_level"]
-    assert closed["alarm_validity"] == yawned["alarm_validity"]
-    assert "驾驶员闭眼" in closed["result"]["evidence"][-1]["description"]
-    assert "驾驶员打哈欠" in yawned["result"]["evidence"][-1]["description"]
+    assert matched["risk_score"] == mismatched["risk_score"] == 1.0
+    assert matched["status"] == "completed"
+    assert mismatched["status"] == "awaiting_review"
+    assert mismatched["vision_agreement"] == "conflict"
+    assert "画面观察支持 closed_eye" in matched["result"]["evidence"][-1]["description"]
+    assert any("不支持 closed_eye" in item["description"] for item in mismatched["evidence"])
 
 
 def test_visible_facts_are_ignored_by_score_fatigue() -> None:
@@ -178,26 +182,47 @@ def test_detector_failure_degrades_to_review(tmp_path) -> None:
     assert "result" not in values
 
 
-def test_vlm_failure_keeps_detections_for_review(tmp_path) -> None:
-    def respond(messages: list[dict[str, str]]) -> str:
-        if "visible_facts" in messages[0]["content"]:
-            return "not-json"
-        return REPORT
+class _FailingObservation:
+    def observe(self, image_id: str, *, task_id: str) -> list[str]:
+        raise RuntimeError("observation unavailable")
 
-    _, values = _run(tmp_path, _high_alarm(image_id="image_closed_eye"), content=respond)
+
+def test_observation_failure_keeps_detections_for_review(tmp_path) -> None:
+    _, values = _run(
+        tmp_path,
+        _high_alarm(image_id="image_closed_eye"),
+        observation=_FailingObservation(),
+    )
 
     visual = [item for item in values["evidence"] if item["type"] == "vision"]
     assert values["status"] == "awaiting_review"
     assert values["vision_status"] == "hit"
     assert values["vlm_status"] == "degraded"
-    assert values["errors"][-1]["code"] == "output_invalid"
+    assert values["errors"][-1]["code"] == "vision_unavailable"
     assert any("closed_eye" in item["description"] for item in visual)
     assert "result" not in values
 
 
+def test_image_review_does_not_spend_model_budget(tmp_path) -> None:
+    _, values = _run(
+        tmp_path,
+        _high_alarm(image_id="image_closed_eye"),
+        max_model_calls=0,
+    )
+
+    assert values["status"] == "failed"
+    assert values["vision_status"] == "hit"
+    assert values["vlm_status"] == "hit"
+    assert values["errors"][-1]["code"] == "budget_exceeded"
+
+
 def test_upload_returns_fixture_detection(tmp_path) -> None:
     app = create_app(
-        Settings(max_retries=1, checkpoint_path=str(tmp_path / "checkpoints.sqlite")),
+        Settings(
+            max_retries=1,
+            checkpoint_path=str(tmp_path / "checkpoints.sqlite"),
+            vision_store_dir=str(tmp_path / "vision"),
+        ),
         build_seed_repository(),
         FakeModelAdapter(REPORT),
         open_checkpointer(tmp_path / "checkpoints.sqlite"),
@@ -214,11 +239,16 @@ def test_upload_returns_fixture_detection(tmp_path) -> None:
     assert detection["label"] == "closed_eye"
     assert detection["confidence"] == 0.91
     assert detection["bbox"] == [0.4, 0.2, 0.62, 0.55]
+    assert (tmp_path / "vision" / "image_closed_eye").read_bytes() == b"not-a-real-image"
 
 
 def test_unknown_image_is_a_miss(tmp_path) -> None:
     app = create_app(
-        Settings(max_retries=1, checkpoint_path=str(tmp_path / "checkpoints.sqlite")),
+        Settings(
+            max_retries=1,
+            checkpoint_path=str(tmp_path / "checkpoints.sqlite"),
+            vision_store_dir=str(tmp_path / "vision"),
+        ),
         build_seed_repository(),
         FakeModelAdapter(REPORT),
         open_checkpointer(tmp_path / "checkpoints.sqlite"),
@@ -239,6 +269,7 @@ def test_fixture_catalog_covers_required_samples() -> None:
     index = packaged_vision_index()
     assert index.analyze("image_closed_eye")[0].label == "closed_eye"
     assert index.analyze("image_camera_occlusion")[0].label == "camera_occlusion"
+    assert index.analyze("image_closed_eye_mismatch")[0].label == "closed_eye"
     assert index.analyze("image_empty") == []
     assert index.analyze("image_closed_eye", b"pixels")[0].label == "closed_eye"
 
@@ -247,3 +278,105 @@ def test_alarm_accepts_optional_image_id() -> None:
     alarm = _alarm(image_id="image_closed_eye")
     assert alarm.image_id == "image_closed_eye"
     assert _alarm().image_id is None
+
+
+def test_packaged_observations_cover_required_samples() -> None:
+    from vehicle_agent.knowledge.vision import packaged_observations
+
+    observations = packaged_observations()
+    assert observations.observe("image_closed_eye", task_id="t") == ["closed_eye"]
+    assert observations.observe("image_camera_occlusion", task_id="t") == ["camera_occlusion"]
+    assert observations.observe("image_closed_eye_mismatch", task_id="t") == ["driver"]
+
+
+def test_vlm_labels_use_the_same_comparison(tmp_path) -> None:
+    store = tmp_path / "vision"
+    store_image(store, "image_closed_eye", b"frame-bytes")
+    settings = Settings(
+        max_retries=0,
+        checkpoint_path=str(tmp_path / "checkpoints.sqlite"),
+        review_backend="vlm",
+        vision_store_dir=str(store),
+        vlm_model_name="qwen-vl",
+        prompt_version="report-v6",
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["model"] == "qwen-vl"
+        parts = body["messages"][1]["content"]
+        assert any(part.get("type") == "image_url" for part in parts)
+        payload = {"labels": ["driver"]}
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": json.dumps(payload)}}],
+                "usage": {"total_tokens": 8},
+            },
+        )
+
+    model = OpenAICompatibleModel(
+        settings,
+        vision_client=httpx.Client(
+            base_url="http://vlm.test/v1/",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    harness = Harness(settings, model, build_vehicle_tools(build_seed_repository()))
+    graph = build_graph(harness, open_checkpointer(tmp_path / "checkpoints.sqlite"))
+    alarm = _high_alarm(id="alarm_vlm", image_id="image_closed_eye")
+    graph.invoke(
+        {"task_id": alarm.id, "alarm": alarm.model_dump(mode="json"), "errors": []},
+        {"configurable": {"thread_id": alarm.id}},
+    )
+    values = graph.get_state({"configurable": {"thread_id": alarm.id}}).values
+    note = json.loads(
+        next(
+            event["note"]
+            for event in values["trace"]
+            if event["node"] == "vision" and event["note"]
+        )
+    )
+
+    assert values["status"] == "awaiting_review"
+    assert values["vision_agreement"] == "conflict"
+    assert values["vlm_status"] == "hit"
+    assert values["risk_score"] == 1.0
+    assert note["image_id"] == "image_closed_eye"
+    assert note["prompt_version"] == "report-v6"
+    assert note["labels"] == ["driver"]
+    assert any("不支持 closed_eye" in item["description"] for item in values["evidence"])
+
+
+def test_vlm_http_failure_keeps_detections(tmp_path) -> None:
+    store = tmp_path / "vision"
+    store_image(store, "image_closed_eye", b"frame-bytes")
+    settings = Settings(
+        max_retries=0,
+        checkpoint_path=str(tmp_path / "checkpoints.sqlite"),
+        review_backend="vlm",
+        vision_store_dir=str(store),
+    )
+    model = OpenAICompatibleModel(
+        settings,
+        vision_client=httpx.Client(
+            base_url="http://vlm.test/v1/",
+            transport=httpx.MockTransport(lambda request: httpx.Response(503)),
+        ),
+    )
+    harness = Harness(settings, model, build_vehicle_tools(build_seed_repository()))
+    graph = build_graph(harness, open_checkpointer(tmp_path / "checkpoints.sqlite"))
+    alarm = _high_alarm(id="alarm_vlm_down", image_id="image_closed_eye")
+    graph.invoke(
+        {"task_id": alarm.id, "alarm": alarm.model_dump(mode="json"), "errors": []},
+        {"configurable": {"thread_id": alarm.id}},
+    )
+    values = graph.get_state({"configurable": {"thread_id": alarm.id}}).values
+    visual = [item for item in values["evidence"] if item["type"] == "vision"]
+
+    assert values["status"] == "awaiting_review"
+    assert values["vision_status"] == "hit"
+    assert values["vlm_status"] == "degraded"
+    assert values["errors"][-1]["code"] == "model_failed"
+    assert any("closed_eye" in item["description"] for item in visual)
+    assert "result" not in values

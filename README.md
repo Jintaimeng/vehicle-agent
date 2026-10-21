@@ -25,7 +25,9 @@ FastAPI
 
 工具通过 `ToolRegistry` 注册。默认 `VEHICLE_AGENT_TOOL_BACKEND=local`，研判直接调用进程内 handler。设为 `mcp` 后，同名工具改为 MCP `tools/call`。`VEHICLE_AGENT_MCP_TRANSPORT` 默认 `memory`，在进程内走 MCP 协议；设为 `stdio` 时拉起 `python -m vehicle_agent.mcp`。调用方角色是 `VEHICLE_AGENT_MCP_ROLE`，默认 `monitor`。四个工具都是只读，可以安全重试。
 
-图片检测走 `VisionIndex`，由研判节点直接调用，不进入 MCP。报警可以带可选 `image_id`。没有图片时跳过检测，风险分、置信度和复核条件与之前一致。有图片时返回归一化检测框、类别和置信度，并作为 `vision` 证据。视觉复核只根据检测 JSON 写可见事实，不改风险分。`POST /api/v1/vision/images` 用同一检测器。
+图片检测走 `VisionIndex`，由研判节点直接调用，不进入 MCP。报警可以带可选 `image_id`。没有图片时跳过检测，风险分、置信度和复核条件与之前一致。有图片时返回归一化检测框、类别和置信度，并作为 `vision` 证据。画面复核读取与检测分开的观察标签，由代码比较类别；不一致时进入人工复核，不改风险分。`POST /api/v1/vision/images` 用同一检测器，并把图片按 `image_id` 存到本地目录。
+
+默认 `VEHICLE_AGENT_REVIEW_BACKEND=fixture`，观察来自仓库内定样本，不调用视觉大模型。设为 `vlm` 后，研判读取已保存的关键帧，交给 `VEHICLE_AGENT_VLM_BASE_URL` 上的 `VEHICLE_AGENT_VLM_MODEL_NAME`。返回的标签走同一比较。默认测试不调用视觉大模型。
 
 短视频走定样本时间轴。报警可以带可选 `video_id`；同时有 `image_id` 时以视频为准。连续闭眼或打哈欠达到 2 秒、平均置信度不低于 0.6、车速不低于 60，且窗口内没有遮挡时，才把关键帧时间戳写入证据。单帧闭眼不形成事件。`POST /api/v1/vision/videos` 用同一聚合。时间轴不解码视频文件。
 
@@ -152,6 +154,16 @@ D:\uv_venv\Scripts\python.exe -m pytest tests/test_yolo_acceptance.py
 ```
 
 权重或图片不存在时，这条验收会跳过。默认 `pytest` 不加载 YOLO。
+
+视觉大模型验收需要兼容的对话接口和一张已能读取的本地图片。默认测试不调用它。
+
+```powershell
+$env:VEHICLE_AGENT_RUN_VLM="1"
+$env:VEHICLE_AGENT_VLM_BASE_URL="http://127.0.0.1:8001/v1"
+$env:VEHICLE_AGENT_VLM_MODEL_NAME="qwen-vl"
+$env:VEHICLE_AGENT_VLM_IMAGE="data/vision-sample.jpg"
+D:\uv_venv\Scripts\python.exe -m pytest tests/test_vlm_acceptance.py
+```
 
 需要 FFmpeg 抽帧验收时，准备本机 `ffmpeg` 和一条本地短视频。默认测试不调用它。
 

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_base_url: str = "http://127.0.0.1:8001/v1"
     model_api_key: str = "local"
     model_name: str = "qwen"
-    prompt_version: str = "report-v5"
+    prompt_version: str = "report-v6"
     request_timeout_seconds: float = 30
     max_retries: int = 2
     max_tool_calls: int = 8
@@ -32,3 +32,8 @@ class Settings(BaseSettings):
     mcp_role: str = "monitor"
     vision_backend: Literal["fixture", "yolo"] = "fixture"
     yolo_weights: str = "data/yolo.pt"
+    review_backend: Literal["fixture", "vlm"] = "fixture"
+    vision_store_dir: str = "data/vision"
+    vlm_base_url: str = "http://127.0.0.1:8001/v1"
+    vlm_api_key: str = "local"
+    vlm_model_name: str = "qwen-vl"

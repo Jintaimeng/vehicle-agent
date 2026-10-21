@@ -16,6 +16,7 @@ RegulationStatus = Literal["hit", "miss", "degraded"]
 GraphStatus = Literal["hit", "miss", "degraded"]
 VisionStatus = Literal["skipped", "hit", "miss", "degraded"]
 VlmStatus = Literal["skipped", "hit", "degraded"]
+VisionAgreement = Literal["match", "conflict"]
 _HIT_BONUS = 0.05
 _MISS_PENALTY = 0.2
 _CONFLICT_FAULT = "camera_occlusion"
@@ -39,6 +40,7 @@ def score_fatigue(
     vlm_status: VlmStatus = "skipped",
     visible_facts: list[str] | None = None,
     video_timing: tuple[float, float, float] | None = None,
+    vision_agreement: VisionAgreement | None = None,
 ) -> dict:
     """Deterministic risk score. The model is not allowed to override these fields."""
 
@@ -188,6 +190,8 @@ def score_fatigue(
                     description="法规摘录要求按疲劳驾驶处置，但画面检测到摄像头遮挡，证据冲突",
                 )
             )
+        if vision_agreement == "conflict":
+            confidence -= _MISS_PENALTY
 
     risk_score = min(1.0, risk_score)
     confidence = min(0.95, max(0.0, confidence))
@@ -217,7 +221,8 @@ def score_fatigue(
         or conflict
         or vision_status in {"miss", "degraded"}
         or vlm_status == "degraded"
-        or vision_conflict,
+        or vision_conflict
+        or vision_agreement == "conflict",
         "evidence": [item.model_dump() for item in evidence],
     }
 

@@ -5,7 +5,12 @@ from vehicle_agent.graph.nodes import make_nodes
 from vehicle_agent.graph.state import JudgementState, Route
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.video import VideoTimeline, packaged_video_timeline
-from vehicle_agent.knowledge.vision import VisionIndex, open_vision_index
+from vehicle_agent.knowledge.vision import (
+    ObservationSource,
+    VisionIndex,
+    open_observation,
+    open_vision_index,
+)
 
 
 def build_graph(
@@ -13,13 +18,15 @@ def build_graph(
     checkpointer: SqliteSaver,
     vision_index: VisionIndex | None = None,
     video_timeline: VideoTimeline | None = None,
+    observation: ObservationSource | None = None,
 ):
     index = vision_index or open_vision_index(
         harness.settings.vision_backend,
         weights=harness.settings.yolo_weights,
     )
     timeline = video_timeline if video_timeline is not None else packaged_video_timeline(index)
-    nodes = make_nodes(harness, index, timeline)
+    observer = observation if observation is not None else open_observation(harness)
+    nodes = make_nodes(harness, index, timeline, observer)
     graph = StateGraph(JudgementState)
     graph.add_node("validate", nodes["validate"])
     graph.add_node("context", nodes["context"])

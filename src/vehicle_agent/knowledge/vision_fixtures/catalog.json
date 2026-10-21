@@ -22,5 +22,15 @@
   "image_empty": {
     "model_version": "fixture-v1",
     "detections": []
+  },
+  "image_closed_eye_mismatch": {
+    "model_version": "fixture-v1",
+    "detections": [
+      {
+        "label": "closed_eye",
+        "confidence": 0.91,
+        "bbox": [0.4, 0.2, 0.62, 0.55]
+      }
+    ]
   }
 }

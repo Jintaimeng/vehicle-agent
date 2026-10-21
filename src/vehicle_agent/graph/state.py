@@ -16,6 +16,7 @@ class JudgementState(TypedDict, total=False):
     detections: list[dict]
     vision_status: Literal["skipped", "hit", "miss", "degraded"]
     vlm_status: Literal["skipped", "hit", "degraded"]
+    vision_agreement: Literal["match", "conflict"]
     visible_facts: list[str]
     video_start_s: float
     video_end_s: float

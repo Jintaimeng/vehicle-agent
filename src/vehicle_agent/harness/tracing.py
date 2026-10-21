@@ -13,6 +13,7 @@ class TraceEvent(BaseModel):
     status: Literal["ok", "error"]
     error_code: str | None = None
     tokens: int | None = None
+    note: str | None = None
 
 
 class TraceRecorder:
