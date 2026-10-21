@@ -1,15 +1,23 @@
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import TypeVar
 
 from pydantic import BaseModel, Field
 
-from vehicle_agent.domain.models import Alarm, Driver, Vehicle
+from vehicle_agent.config import Settings
+from vehicle_agent.domain.models import Alarm, Detection, Driver, Vehicle
 from vehicle_agent.knowledge.graph import GraphFact, GraphIndex, seed_graph_index
 from vehicle_agent.knowledge.index import (
     RegulationIndex,
     RegulationSnippet,
     packaged_regulation_index,
+)
+from vehicle_agent.knowledge.video import VideoOutcome, VideoTimeline, open_video_timeline
+from vehicle_agent.knowledge.vision import (
+    VisionIndex,
+    open_vision_index,
+    read_stored_image,
 )
 from vehicle_agent.repositories.base import AlarmRepository
 
@@ -93,13 +101,40 @@ class QueryVehicleGraphOutput(BaseModel):
     facts: list[GraphFact]
 
 
+class AnalyzeImageInput(BaseModel):
+    image_id: str
+
+
+class AnalyzeImageOutput(BaseModel):
+    detections: list[Detection]
+
+
+class AnalyzeVideoInput(BaseModel):
+    video_id: str
+    speed_kmh: float = Field(ge=0)
+
+
 def build_vehicle_tools(
     repository: AlarmRepository,
     regulations: RegulationIndex | None = None,
     graph: GraphIndex | None = None,
+    vision: VisionIndex | None = None,
+    timeline: VideoTimeline | None = None,
+    settings: Settings | None = None,
 ) -> ToolRegistry:
+    runtime = settings or Settings()
     index = packaged_regulation_index() if regulations is None else regulations
     relations = seed_graph_index() if graph is None else graph
+    detector = vision or open_vision_index(runtime.vision_backend, weights=runtime.yolo_weights)
+    video = (
+        timeline
+        if timeline is not None
+        else open_video_timeline(
+            runtime.video_backend,
+            detector,
+            Path(runtime.vision_store_dir),
+        )
+    )
     registry = ToolRegistry()
 
     def get_vehicle_context(payload: GetVehicleContextInput) -> VehicleContextOutput:
@@ -164,6 +199,40 @@ def build_vehicle_tools(
             input_model=QueryVehicleGraphInput,
             output_model=QueryVehicleGraphOutput,
             handler=query_vehicle_graph,
+            required_role="monitor",
+        )
+    )
+
+    def analyze_image(payload: AnalyzeImageInput) -> AnalyzeImageOutput:
+        if runtime.vision_backend == "yolo":
+            content = read_stored_image(Path(runtime.vision_store_dir), payload.image_id)
+            if not content:
+                raise ValueError(f"stored image empty: {payload.image_id}")
+            detections = detector.analyze(payload.image_id, content)
+        else:
+            detections = detector.analyze(payload.image_id)
+        return AnalyzeImageOutput(detections=detections)
+
+    def analyze_video(payload: AnalyzeVideoInput) -> VideoOutcome:
+        return video.analyze(payload.video_id, payload.speed_kmh)
+
+    registry.register(
+        RegisteredTool(
+            name="analyze_image",
+            description="按图片标识检测画面目标",
+            input_model=AnalyzeImageInput,
+            output_model=AnalyzeImageOutput,
+            handler=analyze_image,
+            required_role="monitor",
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            name="analyze_video",
+            description="按视频标识聚合短视频中的连续风险帧",
+            input_model=AnalyzeVideoInput,
+            output_model=VideoOutcome,
+            handler=analyze_video,
             required_role="monitor",
         )
     )

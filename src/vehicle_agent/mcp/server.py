@@ -1,6 +1,7 @@
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import anyio
 import mcp.types as types
@@ -11,6 +12,8 @@ from vehicle_agent.config import Settings
 from vehicle_agent.harness.tools import RegisteredTool, ToolRegistry, build_vehicle_tools
 from vehicle_agent.knowledge.graph import open_graph_index
 from vehicle_agent.knowledge.index import open_regulation_index
+from vehicle_agent.knowledge.video import open_video_timeline
+from vehicle_agent.knowledge.vision import open_vision_index
 from vehicle_agent.repositories.memory import build_seed_repository
 
 POLICY_DENIED = "policy_denied"
@@ -62,7 +65,20 @@ def serve_stdio() -> None:
     )
     _prepare(regulations)
     _prepare(graph)
-    registry = build_vehicle_tools(build_seed_repository(), regulations, graph)
+    vision = open_vision_index(settings.vision_backend, weights=settings.yolo_weights)
+    timeline = open_video_timeline(
+        settings.video_backend,
+        vision,
+        Path(settings.vision_store_dir),
+    )
+    registry = build_vehicle_tools(
+        build_seed_repository(),
+        regulations,
+        graph,
+        vision,
+        timeline,
+        settings=settings,
+    )
     anyio.run(_serve, build_mcp_server(registry))
 
 

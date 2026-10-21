@@ -66,7 +66,9 @@ def create_app(
         if video_timeline is None
         else video_timeline
     )
-    tools, mcp_session = open_registered_tools(settings, repository, regulations, index)
+    tools, mcp_session = open_registered_tools(
+        settings, repository, regulations, index, vision, timeline
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -76,7 +78,7 @@ def create_app(
         _close_index(index)
         _close_index(regulations)
 
-    graph = build_graph(Harness(settings, model, tools), checkpointer, vision, timeline)
+    graph = build_graph(Harness(settings, model, tools), checkpointer)
     app = FastAPI(title="Vehicle Guard AI", version="0.1.0", lifespan=lifespan)
     app.state.vision_index = vision
     app.state.video_timeline = timeline

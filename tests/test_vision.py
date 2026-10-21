@@ -51,6 +51,7 @@ def test_alarm_without_image_keeps_previous_score(tmp_path) -> None:
     assert values["status"] == "completed"
     assert values["vision_status"] == "skipped"
     assert values["risk_score"] == 1.0
+    assert all(event["name"] not in {"analyze_image", "analyze_video"} for event in values["trace"])
     assert all(item["type"] != "vision" for item in values["result"]["evidence"])
 
 

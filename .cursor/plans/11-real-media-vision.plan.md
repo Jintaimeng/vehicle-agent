@@ -16,7 +16,7 @@ isProject: false
 
 # 11 真实媒体视觉
 
-上一阶段是已落地的关键帧画面复核，见 [.cursor/plans/10-keyframe-visual-review.plan.md](.cursor/plans/10-keyframe-visual-review.plan.md)。本文件是阶段 11，落地到 [.cursor/plans/11-real-media-vision.plan.md](.cursor/plans/11-real-media-vision.plan.md)。下一阶段再写 `.cursor/plans/12-vision-mcp.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 16.2 节里尚未接上的两步：研判时把图片字节交给检测器，以及用 FFmpeg 从短视频抽出帧并回到现有时间轴。目标跟踪、检测可视化、事件入库、批量推理、OpenCV、RTSP、循环视频流、工单、Skill、Kafka 和前端仍不纳入。
+上一阶段是已落地的关键帧画面复核，见 [.cursor/plans/10-keyframe-visual-review.plan.md](.cursor/plans/10-keyframe-visual-review.plan.md)。本文件是阶段 11，落地到 [.cursor/plans/11-real-media-vision.plan.md](.cursor/plans/11-real-media-vision.plan.md)。下一阶段是 [.cursor/plans/12-vision-mcp.plan.md](.cursor/plans/12-vision-mcp.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 16.2 节里尚未接上的两步：研判时把图片字节交给检测器，以及用 FFmpeg 从短视频抽出帧并回到现有时间轴。目标跟踪、检测可视化、事件入库、批量推理、OpenCV、RTSP、循环视频流、工单、Skill、Kafka 和前端仍不纳入。
 
 阶段 10 的代码和 README 已经完成，计划待办仍是 pending。落盘本文件时把那四项改为 completed。
 

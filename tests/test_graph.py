@@ -56,16 +56,22 @@ def _run(
     observation=None,
     **settings,
 ):
+    runtime = _settings(**settings)
     harness = Harness(
-        _settings(**settings),
+        runtime,
         FakeModelAdapter(content),
-        build_vehicle_tools(build_seed_repository(), regulations, graph),
+        build_vehicle_tools(
+            build_seed_repository(),
+            regulations,
+            graph,
+            vision,
+            video,
+            settings=runtime,
+        ),
     )
     graph = build_graph(
         harness,
         open_checkpointer(tmp_path / "checkpoints.sqlite"),
-        vision,
-        video,
         observation,
     )
     config = {"configurable": {"thread_id": alarm.id}}

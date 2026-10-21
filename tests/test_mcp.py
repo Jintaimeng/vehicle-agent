@@ -7,7 +7,11 @@ from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.errors import PolicyDeniedError, ToolExecutionError
 from vehicle_agent.harness.model import FakeModelAdapter
 from vehicle_agent.harness.runtime import Harness
-from vehicle_agent.harness.tools import SearchRegulationsInput, build_vehicle_tools
+from vehicle_agent.harness.tools import (
+    AnalyzeImageInput,
+    SearchRegulationsInput,
+    build_vehicle_tools,
+)
 from vehicle_agent.mcp.client import McpToolSession, build_mcp_client_tools
 from vehicle_agent.repositories.memory import build_seed_repository
 
@@ -16,6 +20,8 @@ TOOL_NAMES = (
     "list_recent_alarms",
     "search_regulations",
     "query_vehicle_graph",
+    "analyze_image",
+    "analyze_video",
 )
 
 
@@ -35,8 +41,20 @@ async def _broken_connector():
     yield None
 
 
-def _session(role: str = "monitor", regulations=None, graph=None) -> tuple[McpToolSession, object]:
-    registry = build_vehicle_tools(build_seed_repository(), regulations, graph)
+def _session(
+    role: str = "monitor",
+    regulations=None,
+    graph=None,
+    vision=None,
+    timeline=None,
+) -> tuple[McpToolSession, object]:
+    registry = build_vehicle_tools(
+        build_seed_repository(),
+        regulations,
+        graph,
+        vision,
+        timeline,
+    )
     session = McpToolSession.open_memory(registry, role=role)
     return session, registry
 
@@ -66,6 +84,19 @@ def test_search_regulations_matches_the_local_registry() -> None:
         )
         assert remote == local.model_dump(mode="json")
         assert remote["snippets"][0]["document_id"] == "fatigue-rules"
+    finally:
+        session.close()
+
+
+def test_analyze_image_matches_the_local_registry() -> None:
+    session, registry = _session()
+    try:
+        remote = session.call("analyze_image", {"image_id": "image_closed_eye"})
+        local = registry.get("analyze_image").handler(
+            AnalyzeImageInput(image_id="image_closed_eye")
+        )
+        assert remote == local.model_dump(mode="json")
+        assert remote["detections"][0]["label"] == "closed_eye"
     finally:
         session.close()
 
@@ -149,8 +180,13 @@ def test_mcp_judgement_matches_local_scoring(tmp_path) -> None:
     assert documents[0]["source"] == "fatigue-rules"
     assert "第2节" in documents[0]["description"]
     assert relations
-    assert tool_events == list(TOOL_NAMES)
-    assert session.calls == list(TOOL_NAMES)
+    assert tool_events == [
+        "get_vehicle_context",
+        "list_recent_alarms",
+        "search_regulations",
+        "query_vehicle_graph",
+    ]
+    assert session.calls == tool_events
 
 
 def test_regulation_failure_retries_then_degrades(tmp_path) -> None:
@@ -239,6 +275,78 @@ def test_session_startup_failure_stops_at_context(tmp_path) -> None:
     assert values["trace"][-1]["node"] == "context"
     assert "risk_score" not in values
     assert session.calls == ["get_vehicle_context", "get_vehicle_context"]
+
+
+class _FailingVision:
+    def analyze(self, image_id: str, content: bytes | None = None) -> list:
+        raise RuntimeError("vision index unavailable")
+
+
+def test_mcp_image_judgement_matches_local(tmp_path) -> None:
+    alarm = _alarm(
+        id="alarm_mcp_image",
+        vehicle_id="vehicle_001",
+        driver_id="driver_001",
+        device_id="device_001",
+        speed_kmh=85,
+        raw_confidence=0.9,
+        image_id="image_closed_eye",
+    )
+    _, local = _run(tmp_path, alarm)
+    session, registry = _session()
+    tools = build_mcp_client_tools(session, registry)
+    try:
+        graph = build_graph(
+            Harness(
+                Settings(max_retries=1, checkpoint_path=str(tmp_path / "mcp.sqlite")),
+                FakeModelAdapter(REPORT),
+                tools,
+            ),
+            open_checkpointer(tmp_path / "mcp.sqlite"),
+        )
+        config = {"configurable": {"thread_id": alarm.id}}
+        graph.invoke(
+            {"task_id": alarm.id, "alarm": alarm.model_dump(mode="json"), "errors": []},
+            config,
+        )
+        values = graph.get_state(config).values
+    finally:
+        session.close()
+
+    assert values["status"] == local["status"] == "completed"
+    assert values["risk_score"] == local["risk_score"] == 1.0
+    assert values["visible_facts"] == local["visible_facts"]
+    assert "analyze_image" in session.calls
+
+
+def test_mcp_detector_failure_retries_then_reviews(tmp_path) -> None:
+    session, registry = _session(vision=_FailingVision())
+    tools = build_mcp_client_tools(session, registry)
+    alarm = _alarm(id="alarm_mcp_vision_down", image_id="image_closed_eye")
+    try:
+        graph = build_graph(
+            Harness(
+                Settings(max_retries=1, checkpoint_path=str(tmp_path / "mcp.sqlite")),
+                FakeModelAdapter(REPORT),
+                tools,
+            ),
+            open_checkpointer(tmp_path / "mcp.sqlite"),
+        )
+        config = {"configurable": {"thread_id": alarm.id}}
+        graph.invoke(
+            {"task_id": alarm.id, "alarm": alarm.model_dump(mode="json"), "errors": []},
+            config,
+        )
+        values = graph.get_state(config).values
+    finally:
+        session.close()
+
+    assert values["status"] == "awaiting_review"
+    assert values["vision_status"] == "degraded"
+    assert values["errors"][-1]["code"] == "vision_unavailable"
+    assert values["status"] != "failed"
+    assert session.calls.count("analyze_image") == 2
+    assert "result" not in values
 
 
 def test_local_backend_still_scores_without_mcp(tmp_path) -> None:

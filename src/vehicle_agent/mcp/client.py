@@ -157,13 +157,27 @@ def build_mcp_client_tools(
     return registry
 
 
-def open_registered_tools(settings: Settings, repository, regulations, graph):
+def open_registered_tools(
+    settings: Settings,
+    repository,
+    regulations,
+    graph,
+    vision=None,
+    timeline=None,
+):
     if settings.tool_backend == "local":
-        return build_vehicle_tools(repository, regulations, graph), None
+        return (
+            build_vehicle_tools(
+                repository, regulations, graph, vision, timeline, settings=settings
+            ),
+            None,
+        )
     if settings.tool_backend != "mcp":
         raise ValueError(f"unsupported tool backend: {settings.tool_backend}")
     if settings.mcp_transport == "memory":
-        server_tools = build_vehicle_tools(repository, regulations, graph)
+        server_tools = build_vehicle_tools(
+            repository, regulations, graph, vision, timeline, settings=settings
+        )
         session = McpToolSession.open_memory(server_tools, role=settings.mcp_role)
         return build_mcp_client_tools(session, server_tools), session
     if settings.mcp_transport == "stdio":
@@ -218,4 +232,8 @@ def _child_env(settings: Settings) -> dict[str, str]:
         "VEHICLE_AGENT_NEO4J_URI": settings.neo4j_uri,
         "VEHICLE_AGENT_NEO4J_USER": settings.neo4j_user,
         "VEHICLE_AGENT_NEO4J_PASSWORD": settings.neo4j_password,
+        "VEHICLE_AGENT_VISION_BACKEND": settings.vision_backend,
+        "VEHICLE_AGENT_VIDEO_BACKEND": settings.video_backend,
+        "VEHICLE_AGENT_VISION_STORE_DIR": settings.vision_store_dir,
+        "VEHICLE_AGENT_YOLO_WEIGHTS": settings.yolo_weights,
     }
