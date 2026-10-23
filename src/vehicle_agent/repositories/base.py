@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Protocol
 
-from vehicle_agent.domain.models import Alarm, Device, Driver, Vehicle
+from vehicle_agent.domain.models import Alarm, Device, DeviceMaintenance, Driver, Vehicle
 
 
 class AlarmRepository(Protocol):
@@ -12,6 +12,8 @@ class AlarmRepository(Protocol):
     def get_driver(self, driver_id: str) -> Driver | None: ...
 
     def get_device(self, device_id: str) -> Device: ...
+
+    def get_maintenance(self, device_id: str) -> DeviceMaintenance: ...
 
     def find_vehicle_id(self, device_id: str) -> str | None: ...
 

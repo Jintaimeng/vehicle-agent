@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from vehicle_agent.domain.models import Device, Evidence
+from vehicle_agent.domain.models import Device, DeviceMaintenance, Evidence
 from vehicle_agent.harness.errors import ToolExecutionError
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.harness.tools import QueryVehicleGraphOutput, ToolRegistry
@@ -11,7 +11,8 @@ from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.skills.alarm_verification import ALARM_VERIFICATION
 
 DiagnosisCause = Literal["offline", "camera_occlusion", "no_device_fault"]
-DiagnosisStepName = Literal["status", "graph", "decide"]
+DiagnosisStepName = Literal["status", "graph", "maintenance", "decide"]
+MaintenanceStatus = Literal["hit", "miss", "degraded"]
 _OCCLUSION = "camera_occlusion"
 
 
@@ -42,6 +43,7 @@ class DeviceDiagnosis(BaseModel):
     device_id: str
     status: Literal["completed", "degraded"]
     cause: DiagnosisCause | None = None
+    maintenance_status: MaintenanceStatus | None = None
     evidence: list[Evidence]
 
 
@@ -61,9 +63,10 @@ DEVICE_DIAGNOSIS = DeviceDiagnosisSkill(
     steps=[
         DiagnosisStep(name="status", tool="get_device_status", on_failure="degrade"),
         DiagnosisStep(name="graph", tool="query_vehicle_graph", on_failure="degrade"),
+        DiagnosisStep(name="maintenance", tool="get_device_maintenance"),
         DiagnosisStep(name="decide"),
     ],
-    tools=["get_device_status", "query_vehicle_graph"],
+    tools=["get_device_status", "query_vehicle_graph", "get_device_maintenance"],
     output_fields=list(DeviceDiagnosis.model_fields),
     failures=[
         DiagnosisFailure(step="status", status="degraded"),
@@ -90,8 +93,9 @@ def check_device_diagnosis_skill(registry: ToolRegistry) -> None:
             raise RuntimeError(f"device-diagnosis tool is not registered: {name}") from exc
         if not tool.readonly:
             raise RuntimeError(f"device-diagnosis tool must be read-only: {name}")
-    if "get_device_status" in ALARM_VERIFICATION.tools:
-        raise RuntimeError("alarm-verification must not query device status")
+    for name in ("get_device_status", "get_device_maintenance"):
+        if name in ALARM_VERIFICATION.tools:
+            raise RuntimeError(f"alarm-verification must not call {name}")
 
 
 def diagnose_device(
@@ -144,12 +148,38 @@ def diagnose_device(
         cause = "camera_occlusion"
     else:
         cause = "no_device_fault"
+    try:
+        maintenance = harness.call_tool(
+            "get_device_maintenance",
+            {"device_id": device_id},
+            task_id=task_id,
+            node="maintenance",
+        )
+    except ToolExecutionError:
+        return DeviceDiagnosis(
+            skill_id=DEVICE_DIAGNOSIS.id,
+            device_id=device_id,
+            status="completed",
+            cause=cause,
+            maintenance_status="degraded",
+            evidence=evidence,
+        )
+    if not isinstance(maintenance, DeviceMaintenance):
+        return DeviceDiagnosis(
+            skill_id=DEVICE_DIAGNOSIS.id,
+            device_id=device_id,
+            status="completed",
+            cause=cause,
+            maintenance_status="degraded",
+            evidence=evidence,
+        )
     return DeviceDiagnosis(
         skill_id=DEVICE_DIAGNOSIS.id,
         device_id=device_id,
         status="completed",
         cause=cause,
-        evidence=evidence,
+        maintenance_status="hit" if maintenance.repair is not None else "miss",
+        evidence=[*evidence, *_maintenance_evidence(maintenance)],
     )
 
 
@@ -171,6 +201,34 @@ def _status_evidence(device: Device) -> Evidence:
         source="device",
         description=f"设备 {device.id} {state}，最后心跳 {heartbeat}",
     )
+
+
+def _maintenance_evidence(item: DeviceMaintenance) -> list[Evidence]:
+    rows = [
+        Evidence(
+            type="context",
+            source="maintenance",
+            description=f"设备 {item.device_id} 固件 {item.firmware_version}",
+        )
+    ]
+    if item.repair is None:
+        rows.append(
+            Evidence(
+                type="context",
+                source="maintenance",
+                description=f"设备 {item.device_id} 无维修记录",
+            )
+        )
+        return rows
+    state = "未关闭" if item.repair.status == "open" else "已关闭"
+    rows.append(
+        Evidence(
+            type="context",
+            source="maintenance",
+            description=f"最近维修 {item.repair.id} {state}，故障 {item.repair.fault}",
+        )
+    )
+    return rows
 
 
 def _graph_evidence(facts: list[GraphFact]) -> list[Evidence]:

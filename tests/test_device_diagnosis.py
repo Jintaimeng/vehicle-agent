@@ -41,7 +41,15 @@ def test_offline_device_keeps_occlusion_as_evidence() -> None:
     assert result.skill_id == "device-diagnosis"
     assert any("离线" in item and "2026-10-07T10:30:00Z" in item for item in descriptions)
     assert any("摄像头遮挡" in item for item in descriptions)
-    assert [event.kind for event in harness.tracer.events] == ["tool", "tool"]
+    assert any("固件 1.2.0" in item for item in descriptions)
+    assert any("repair_003_open" in item and "未关闭" in item for item in descriptions)
+    assert all("repair_003_closed" not in item for item in descriptions)
+    assert result.maintenance_status == "hit"
+    assert [event.name for event in harness.tracer.events] == [
+        "get_device_status",
+        "query_vehicle_graph",
+        "get_device_maintenance",
+    ]
 
 
 def test_online_occluded_device_is_camera_occlusion() -> None:
@@ -55,9 +63,12 @@ def test_online_occluded_device_is_camera_occlusion() -> None:
     ]
     assert repository.get_device("device_004").last_heartbeat_at == NOW
     assert result.cause == "camera_occlusion"
+    assert result.maintenance_status == "miss"
     assert any(
         item.type == "graph" and "摄像头遮挡" in item.description for item in result.evidence
     )
+    assert any("固件 1.3.0" in item.description for item in result.evidence)
+    assert any("无维修记录" in item.description for item in result.evidence)
 
 
 def test_online_clear_device_has_no_fault() -> None:
@@ -66,7 +77,10 @@ def test_online_clear_device_has_no_fault() -> None:
     result = diagnose_device(harness, repository, "device_001")
 
     assert result.cause == "no_device_fault"
+    assert result.maintenance_status == "miss"
     assert all(item.type != "graph" for item in result.evidence)
+    assert any("固件 1.4.0" in item.description for item in result.evidence)
+    assert any("无维修记录" in item.description for item in result.evidence)
 
 
 def test_device_and_graph_failures_do_not_guess() -> None:
@@ -78,14 +92,39 @@ def test_device_and_graph_failures_do_not_guess() -> None:
 
     assert failed.status == "degraded"
     assert failed.cause is None
+    assert failed.maintenance_status is None
+    assert [event.name for event in harness.tracer.events] == ["get_device_status"]
     assert graph_failed.status == "degraded"
     assert graph_failed.cause is None
+    assert "get_device_maintenance" not in [event.name for event in broken.tracer.events]
     with pytest.raises(ToolExecutionError, match="unknown device"):
         diagnose_device(harness, repository, "device_missing")
 
 
+def test_maintenance_failure_keeps_the_cause() -> None:
+    repository = build_seed_repository(failing_maintenance_ids={"device_001"})
+    harness = Harness(
+        Settings(max_retries=0, checkpoint_path="data/test-checkpoints.sqlite"),
+        FakeModelAdapter("{}"),
+        build_vehicle_tools(repository),
+    )
+
+    result = diagnose_device(harness, repository, "device_001")
+    descriptions = [item.description for item in result.evidence]
+
+    assert result.status == "completed"
+    assert result.cause == "no_device_fault"
+    assert result.maintenance_status == "degraded"
+    assert all("固件" not in item and "维修" not in item for item in descriptions)
+
+
 def test_diagnosis_tools_stay_out_of_alarm_verification() -> None:
-    assert DEVICE_DIAGNOSIS.tools == ["get_device_status", "query_vehicle_graph"]
+    assert DEVICE_DIAGNOSIS.tools == [
+        "get_device_status",
+        "query_vehicle_graph",
+        "get_device_maintenance",
+    ]
     assert "get_device_status" not in ALARM_VERIFICATION.tools
+    assert "get_device_maintenance" not in ALARM_VERIFICATION.tools
     assert "query_vehicle_graph" in ALARM_VERIFICATION.tools
     assert len(ALARM_VERIFICATION.tools) == 6

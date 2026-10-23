@@ -1,6 +1,13 @@
 from datetime import UTC, datetime, timedelta
 
-from vehicle_agent.domain.models import Alarm, Device, Driver, Vehicle
+from vehicle_agent.domain.models import (
+    Alarm,
+    Device,
+    DeviceMaintenance,
+    Driver,
+    RepairRecord,
+    Vehicle,
+)
 
 
 class MemoryAlarmRepository:
@@ -14,13 +21,19 @@ class MemoryAlarmRepository:
         failing_vehicle_ids: set[str] | None = None,
         devices: dict[str, Device] | None = None,
         failing_device_ids: set[str] | None = None,
+        firmware: dict[str, str] | None = None,
+        repairs: list[RepairRecord] | None = None,
+        failing_maintenance_ids: set[str] | None = None,
     ) -> None:
         self._vehicles = vehicles
         self._drivers = drivers
         self._alarms = alarms
         self._devices = devices or {}
+        self._firmware = firmware or {}
+        self._repairs = repairs or []
         self._failing_vehicle_ids = failing_vehicle_ids or set()
         self._failing_device_ids = failing_device_ids or set()
+        self._failing_maintenance_ids = failing_maintenance_ids or set()
 
     def get_vehicle(self, vehicle_id: str) -> Vehicle | None:
         self._raise_if_unavailable(vehicle_id)
@@ -36,6 +49,23 @@ class MemoryAlarmRepository:
             return self._devices[device_id]
         except KeyError as exc:
             raise KeyError(f"unknown device: {device_id}") from exc
+
+    def get_maintenance(self, device_id: str) -> DeviceMaintenance:
+        if device_id in self._failing_maintenance_ids:
+            raise ConnectionError(f"maintenance store unavailable for {device_id}")
+        if device_id not in self._devices:
+            raise KeyError(f"unknown device: {device_id}")
+        try:
+            firmware = self._firmware[device_id]
+        except KeyError as exc:
+            raise KeyError(f"unknown device: {device_id}") from exc
+        matched = [item for item in self._repairs if item.device_id == device_id]
+        repair = max(matched, key=lambda item: item.opened_at) if matched else None
+        return DeviceMaintenance(
+            device_id=device_id,
+            firmware_version=firmware,
+            repair=repair,
+        )
 
     def find_vehicle_id(self, device_id: str) -> str | None:
         for vehicle in self._vehicles.values():
@@ -65,7 +95,9 @@ class MemoryAlarmRepository:
             raise ConnectionError(f"vehicle store unavailable for {vehicle_id}")
 
 
-def build_seed_repository() -> MemoryAlarmRepository:
+def build_seed_repository(
+    failing_maintenance_ids: set[str] | None = None,
+) -> MemoryAlarmRepository:
     now = datetime(2026, 10, 9, 10, 30, tzinfo=UTC)
     vehicles = {
         "vehicle_001": Vehicle(
@@ -165,6 +197,29 @@ def build_seed_repository() -> MemoryAlarmRepository:
             raw_confidence=0.77,
         ),
     ]
+    firmware = {
+        "device_001": "1.4.0",
+        "device_002": "1.4.0",
+        "device_003": "1.2.0",
+        "device_004": "1.3.0",
+    }
+    repairs = [
+        RepairRecord(
+            id="repair_003_closed",
+            device_id="device_003",
+            fault="camera_occlusion",
+            status="closed",
+            opened_at=datetime(2026, 10, 1, 10, 30, tzinfo=UTC),
+            closed_at=datetime(2026, 10, 2, 10, 30, tzinfo=UTC),
+        ),
+        RepairRecord(
+            id="repair_003_open",
+            device_id="device_003",
+            fault="camera_occlusion",
+            status="open",
+            opened_at=datetime(2026, 10, 6, 10, 30, tzinfo=UTC),
+        ),
+    ]
     return MemoryAlarmRepository(
         vehicles,
         drivers,
@@ -172,4 +227,7 @@ def build_seed_repository() -> MemoryAlarmRepository:
         failing_vehicle_ids={"vehicle_error"},
         devices=devices,
         failing_device_ids={"device_error"},
+        firmware=firmware,
+        repairs=repairs,
+        failing_maintenance_ids=failing_maintenance_ids,
     )

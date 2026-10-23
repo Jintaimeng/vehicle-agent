@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 AlarmValidity = Literal["likely_true", "uncertain", "unknown"]
 RiskLevel = Literal["low", "medium", "high"]
@@ -35,6 +35,29 @@ class Device(BaseModel):
     id: str
     online_status: Literal["online", "offline"]
     last_heartbeat_at: datetime
+
+
+class RepairRecord(BaseModel):
+    id: str
+    device_id: str
+    fault: Literal["camera_occlusion"]
+    status: Literal["open", "closed"]
+    opened_at: datetime
+    closed_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def closed_at_matches_status(self) -> "RepairRecord":
+        if self.status == "closed" and self.closed_at is None:
+            raise ValueError("closed repair requires closed_at")
+        if self.status == "open" and self.closed_at is not None:
+            raise ValueError("open repair must not have closed_at")
+        return self
+
+
+class DeviceMaintenance(BaseModel):
+    device_id: str
+    firmware_version: str
+    repair: RepairRecord | None = None
 
 
 class Alarm(BaseModel):

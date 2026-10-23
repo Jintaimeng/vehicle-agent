@@ -23,7 +23,7 @@ FastAPI
 
 图谱查询走 `GraphIndex`。默认实现是内存中的固定关系，不依赖数据库。把 `VEHICLE_AGENT_GRAPH_BACKEND` 设为 `neo4j` 后，同一工具改为读取 Neo4j 中的相同事实。查询语句是固定 Cypher，模型只使用已经校验过的 `vehicle_id` 和 `device_id`。
 
-工具通过 `ToolRegistry` 注册。默认 `VEHICLE_AGENT_TOOL_BACKEND=local`，研判直接调用进程内 handler。设为 `mcp` 后，同名工具改为 MCP `tools/call`。`VEHICLE_AGENT_MCP_TRANSPORT` 默认 `memory`，在进程内走 MCP 协议；设为 `stdio` 时拉起 `python -m vehicle_agent.mcp`。调用方角色是 `VEHICLE_AGENT_MCP_ROLE`，默认 `monitor`。十个工具里，车辆、报警、法规、图谱、图片、视频和设备状态这七个是只读，可以安全重试。图片检测和短视频聚合也在其中；`tool_backend=mcp` 时它们同样走 `tools/call`。`get_device_status` 读取定样本设备的在线状态和最后心跳时间。研判图不调用它。画面复核仍由研判节点比较观察标签，不进入 MCP。工单有 `create_workorder`、`get_workorder` 和 `update_workorder`。读取是只读；创建和更新是写操作。研判只在 `risk_level=high` 且不需要人工复核时，经已授权策略调用 `create_workorder`。同一 `task_id` 重复创建返回原来的工单。创建失败时研判结果仍保留，状态保持 `completed`。中风险和人工复核路径不建单。
+工具通过 `ToolRegistry` 注册。默认 `VEHICLE_AGENT_TOOL_BACKEND=local`，研判直接调用进程内 handler。设为 `mcp` 后，同名工具改为 MCP `tools/call`。`VEHICLE_AGENT_MCP_TRANSPORT` 默认 `memory`，在进程内走 MCP 协议；设为 `stdio` 时拉起 `python -m vehicle_agent.mcp`。调用方角色是 `VEHICLE_AGENT_MCP_ROLE`，默认 `monitor`。十一个工具里，车辆、报警、法规、图谱、图片、视频、设备状态和维修记录这八个是只读，可以安全重试。图片检测和短视频聚合也在其中；`tool_backend=mcp` 时它们同样走 `tools/call`。`get_device_status` 读取定样本设备的在线状态和最后心跳时间。`get_device_maintenance` 读取固件版本和最近一次维修记录。研判图不调用这两个工具。画面复核仍由研判节点比较观察标签，不进入 MCP。工单有 `create_workorder`、`get_workorder` 和 `update_workorder`。读取是只读；创建和更新是写操作。研判只在 `risk_level=high` 且不需要人工复核时，经已授权策略调用 `create_workorder`。同一 `task_id` 重复创建返回原来的工单。创建失败时研判结果仍保留，状态保持 `completed`。中风险和人工复核路径不建单。
 
 图片检测走 `VisionIndex`。报警可以带可选 `image_id`。没有图片时跳过检测，风险分、置信度和复核条件与之前一致。有图片时返回归一化检测框、类别和置信度，并作为 `vision` 证据。画面复核读取与检测分开的观察标签，由代码比较类别；不一致时进入人工复核，不改风险分。`POST /api/v1/vision/images` 用同一检测器，并把图片按 `image_id` 存到本地目录。
 
@@ -37,9 +37,9 @@ FastAPI
 
 疲劳驾驶研判由 `alarm-verification` 声明。触发条件是 `driver_fatigue`。执行仍是上面的固定图，模型不选择步骤，也不改风险分或是否建单。Skill 只包含六个只读工具：车辆资料、历史报警、法规检索、图谱查询、图片检测和短视频聚合。有视频时只分析视频，否则有图片时才分析图片。建单仍在报告节点里，不在这份 Skill 中。
 
-设备诊断由 `device-diagnosis` 声明。入参只有设备标识。它读取在线状态和图谱里的摄像头遮挡故障，由代码给出 `offline`、`camera_occlusion` 或 `no_device_fault`。离线优先于遮挡：`device_003` 两者都有，原因仍是离线，遮挡留在证据里。`device_004` 在线且有遮挡。疲劳研判图不调用这次诊断，也不因此改变风险分。
+设备诊断由 `device-diagnosis` 声明。入参只有设备标识。它读取在线状态、图谱里的摄像头遮挡故障、固件版本和最近一次维修记录。原因仍由代码给出：`offline`、`camera_occlusion` 或 `no_device_fault`。固件和维修只写入证据，不改原因。离线优先于遮挡：`device_003` 两者都有，原因仍是离线，遮挡留在证据里，最近维修是未关闭的那条。`device_004` 在线且有遮挡，没有维修记录。疲劳研判图不调用这次诊断，也不因此改变风险分。
 
-本阶段不包含固件库、维修记录、其余 Skill、神经网络 Embedding、目标跟踪、Kafka 和前端。
+本阶段不包含频繁报警、视频缺失、其余 Skill、神经网络 Embedding、目标跟踪、Kafka 和前端。
 
 ## 环境
 

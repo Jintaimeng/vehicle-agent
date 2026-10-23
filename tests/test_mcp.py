@@ -10,6 +10,7 @@ from vehicle_agent.harness.policy import AllowApprovedWritesPolicy
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.harness.tools import (
     AnalyzeImageInput,
+    GetDeviceMaintenanceInput,
     GetDeviceStatusInput,
     SearchRegulationsInput,
     build_vehicle_tools,
@@ -25,6 +26,7 @@ TOOL_NAMES = (
     "analyze_image",
     "analyze_video",
     "get_device_status",
+    "get_device_maintenance",
     "create_workorder",
     "get_workorder",
     "update_workorder",
@@ -116,6 +118,23 @@ def test_device_status_matches_the_local_registry() -> None:
         )
         assert remote == local.model_dump(mode="json")
         assert remote["online_status"] == "offline"
+    finally:
+        session.close()
+
+
+def test_device_maintenance_matches_the_local_registry() -> None:
+    session, registry = _session()
+    try:
+        remote = session.call("get_device_maintenance", {"device_id": "device_003"})
+        local = registry.get("get_device_maintenance").handler(
+            GetDeviceMaintenanceInput(device_id="device_003")
+        )
+        tool = registry.get("get_device_maintenance")
+        assert tool.readonly is True
+        assert remote == local.model_dump(mode="json")
+        assert remote["firmware_version"] == "1.2.0"
+        assert remote["repair"]["id"] == "repair_003_open"
+        assert remote["repair"]["status"] == "open"
     finally:
         session.close()
 
