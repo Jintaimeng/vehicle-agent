@@ -37,6 +37,12 @@ class MemoryAlarmRepository:
         except KeyError as exc:
             raise KeyError(f"unknown device: {device_id}") from exc
 
+    def find_vehicle_id(self, device_id: str) -> str | None:
+        for vehicle in self._vehicles.values():
+            if vehicle.device_id == device_id:
+                return vehicle.id
+        return None
+
     def list_recent_alarms(
         self,
         vehicle_id: str,
@@ -83,6 +89,13 @@ def build_seed_repository() -> MemoryAlarmRepository:
             vehicle_type="coach",
             device_id="device_003",
         ),
+        "vehicle_004": Vehicle(
+            id="vehicle_004",
+            plate_number="粤B13579",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_004",
+        ),
     }
     drivers = {
         "driver_001": Driver(
@@ -119,6 +132,11 @@ def build_seed_repository() -> MemoryAlarmRepository:
             id="device_003",
             online_status="offline",
             last_heartbeat_at=now - timedelta(days=2),
+        ),
+        "device_004": Device(
+            id="device_004",
+            online_status="online",
+            last_heartbeat_at=now,
         ),
     }
     history = [

@@ -69,6 +69,8 @@ def seed_graph_facts() -> list[GraphFact]:
         graph_fact("drives", "vehicle_003", "driver_003"),
         graph_fact("installed_with", "vehicle_003", "device_003"),
         graph_fact("has_fault", "device_003", "camera_occlusion"),
+        graph_fact("installed_with", "vehicle_004", "device_004"),
+        graph_fact("has_fault", "device_004", "camera_occlusion"),
     ]
 
 

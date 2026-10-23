@@ -6,6 +6,7 @@ from vehicle_agent.graph.state import JudgementState, Route
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.vision import ObservationSource, open_observation
 from vehicle_agent.skills.alarm_verification import check_alarm_verification_skill
+from vehicle_agent.skills.device_diagnosis import check_device_diagnosis_skill
 
 _NODE_ORDER = [
     "validate",
@@ -26,6 +27,7 @@ def build_graph(
     observation: ObservationSource | None = None,
 ):
     check_alarm_verification_skill(harness.tools, _NODE_ORDER)
+    check_device_diagnosis_skill(harness.tools)
     observer = observation if observation is not None else open_observation(harness)
     nodes = make_nodes(harness, observer)
     graph = StateGraph(JudgementState)

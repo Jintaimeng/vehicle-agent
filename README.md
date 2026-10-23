@@ -37,7 +37,9 @@ FastAPI
 
 疲劳驾驶研判由 `alarm-verification` 声明。触发条件是 `driver_fatigue`。执行仍是上面的固定图，模型不选择步骤，也不改风险分或是否建单。Skill 只包含六个只读工具：车辆资料、历史报警、法规检索、图谱查询、图片检测和短视频聚合。有视频时只分析视频，否则有图片时才分析图片。建单仍在报告节点里，不在这份 Skill 中。
 
-本阶段不包含其他 Skill、神经网络 Embedding、目标跟踪、Kafka 和前端。
+设备诊断由 `device-diagnosis` 声明。入参只有设备标识。它读取在线状态和图谱里的摄像头遮挡故障，由代码给出 `offline`、`camera_occlusion` 或 `no_device_fault`。离线优先于遮挡：`device_003` 两者都有，原因仍是离线，遮挡留在证据里。`device_004` 在线且有遮挡。疲劳研判图不调用这次诊断，也不因此改变风险分。
+
+本阶段不包含固件库、维修记录、其余 Skill、神经网络 Embedding、目标跟踪、Kafka 和前端。
 
 ## 环境
 

@@ -13,6 +13,8 @@ class AlarmRepository(Protocol):
 
     def get_device(self, device_id: str) -> Device: ...
 
+    def find_vehicle_id(self, device_id: str) -> str | None: ...
+
     def list_recent_alarms(
         self,
         vehicle_id: str,
