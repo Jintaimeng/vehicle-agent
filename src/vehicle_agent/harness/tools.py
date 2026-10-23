@@ -20,6 +20,13 @@ from vehicle_agent.knowledge.vision import (
     read_stored_image,
 )
 from vehicle_agent.repositories.base import AlarmRepository
+from vehicle_agent.workorders import (
+    CreateWorkOrderInput,
+    GetWorkOrderInput,
+    MemoryWorkOrderStore,
+    UpdateWorkOrderInput,
+    WorkOrder,
+)
 
 InputT = TypeVar("InputT", bound=BaseModel)
 OutputT = TypeVar("OutputT", bound=BaseModel)
@@ -121,6 +128,7 @@ def build_vehicle_tools(
     vision: VisionIndex | None = None,
     timeline: VideoTimeline | None = None,
     settings: Settings | None = None,
+    workorders: MemoryWorkOrderStore | None = None,
 ) -> ToolRegistry:
     runtime = settings or Settings()
     index = packaged_regulation_index() if regulations is None else regulations
@@ -135,6 +143,7 @@ def build_vehicle_tools(
             Path(runtime.vision_store_dir),
         )
     )
+    orders = MemoryWorkOrderStore() if workorders is None else workorders
     registry = ToolRegistry()
 
     def get_vehicle_context(payload: GetVehicleContextInput) -> VehicleContextOutput:
@@ -233,6 +242,53 @@ def build_vehicle_tools(
             input_model=AnalyzeVideoInput,
             output_model=VideoOutcome,
             handler=analyze_video,
+            required_role="monitor",
+        )
+    )
+
+    def create_workorder(payload: CreateWorkOrderInput) -> WorkOrder:
+        return orders.create(
+            task_id=payload.task_id,
+            alarm_id=payload.alarm_id,
+            risk_level=payload.risk_level,
+            summary=payload.summary,
+        )
+
+    def get_workorder(payload: GetWorkOrderInput) -> WorkOrder:
+        return orders.get(payload.workorder_id)
+
+    def update_workorder(payload: UpdateWorkOrderInput) -> WorkOrder:
+        return orders.update(payload.workorder_id, payload.status, payload.comment)
+
+    registry.register(
+        RegisteredTool(
+            name="create_workorder",
+            description="为高风险研判创建一张工单",
+            input_model=CreateWorkOrderInput,
+            output_model=WorkOrder,
+            handler=create_workorder,
+            readonly=False,
+            required_role="monitor",
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            name="get_workorder",
+            description="按工单标识读取工单",
+            input_model=GetWorkOrderInput,
+            output_model=WorkOrder,
+            handler=get_workorder,
+            required_role="monitor",
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            name="update_workorder",
+            description="覆盖工单状态和备注",
+            input_model=UpdateWorkOrderInput,
+            output_model=WorkOrder,
+            handler=update_workorder,
+            readonly=False,
             required_role="monitor",
         )
     )

@@ -164,11 +164,18 @@ def open_registered_tools(
     graph,
     vision=None,
     timeline=None,
+    workorders=None,
 ):
     if settings.tool_backend == "local":
         return (
             build_vehicle_tools(
-                repository, regulations, graph, vision, timeline, settings=settings
+                repository,
+                regulations,
+                graph,
+                vision,
+                timeline,
+                settings=settings,
+                workorders=workorders,
             ),
             None,
         )
@@ -176,7 +183,13 @@ def open_registered_tools(
         raise ValueError(f"unsupported tool backend: {settings.tool_backend}")
     if settings.mcp_transport == "memory":
         server_tools = build_vehicle_tools(
-            repository, regulations, graph, vision, timeline, settings=settings
+            repository,
+            regulations,
+            graph,
+            vision,
+            timeline,
+            settings=settings,
+            workorders=workorders,
         )
         session = McpToolSession.open_memory(server_tools, role=settings.mcp_role)
         return build_mcp_client_tools(session, server_tools), session

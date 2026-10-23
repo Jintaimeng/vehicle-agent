@@ -289,7 +289,35 @@ def make_nodes(
             recommendations=draft.recommendations,
             requires_human_review=state["requires_human_review"],
         )
-        return traced({"result": result.model_dump(), "status": "completed"})
+        completed = {"result": result.model_dump(), "status": "completed"}
+        if state.get("risk_level") != "high" or state.get("requires_human_review"):
+            return traced(completed)
+        alarm = Alarm.model_validate(state["alarm"])
+        try:
+            created = harness.call_tool(
+                "create_workorder",
+                {
+                    "task_id": state["task_id"],
+                    "alarm_id": alarm.id,
+                    "risk_level": "high",
+                    "summary": draft.summary,
+                },
+                task_id=state["task_id"],
+                node="report",
+            )
+        except Exception as exc:
+            errors = [
+                *state.get("errors", []),
+                {"code": "workorder_unavailable", "message": str(exc)},
+            ]
+            return traced({**completed, "workorder_status": "degraded", "errors": errors})
+        return traced(
+            {
+                **completed,
+                "workorder_id": created.workorder_id,
+                "workorder_status": "created",
+            }
+        )
 
     return {
         "validate": validate,

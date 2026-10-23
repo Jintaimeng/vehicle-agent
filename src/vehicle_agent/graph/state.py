@@ -29,6 +29,8 @@ class JudgementState(TypedDict, total=False):
     evidence: list[dict]
     result: dict | None
     human_review: dict | None
+    workorder_id: str
+    workorder_status: Literal["created", "degraded"]
     errors: list[dict]
     status: str
     trace: list[dict]

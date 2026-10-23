@@ -8,6 +8,7 @@ from vehicle_agent.domain.models import Alarm
 from vehicle_agent.graph.builder import build_graph
 from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.model import FakeModelAdapter
+from vehicle_agent.harness.policy import AllowApprovedWritesPolicy
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.harness.tools import build_vehicle_tools
 from vehicle_agent.repositories.memory import build_seed_repository
@@ -54,6 +55,7 @@ def _run(
     vision=None,
     video=None,
     observation=None,
+    workorders=None,
     **settings,
 ):
     runtime = _settings(**settings)
@@ -67,7 +69,9 @@ def _run(
             vision,
             video,
             settings=runtime,
+            workorders=workorders,
         ),
+        policy=AllowApprovedWritesPolicy(),
     )
     graph = build_graph(
         harness,

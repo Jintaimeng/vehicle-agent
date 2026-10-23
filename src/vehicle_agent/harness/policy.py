@@ -14,3 +14,12 @@ class AllowReadOnlyPolicy:
     def allow(self, tool: RegisteredTool, arguments: object) -> None:
         if not tool.readonly:
             raise PolicyDeniedError(f"write tool {tool.name} requires approval")
+
+
+class AllowApprovedWritesPolicy:
+    """Read tools stay open. Only work-order creation is an approved write."""
+
+    def allow(self, tool: RegisteredTool, arguments: object) -> None:
+        if tool.readonly or tool.name == "create_workorder":
+            return
+        raise PolicyDeniedError(f"write tool {tool.name} requires approval")

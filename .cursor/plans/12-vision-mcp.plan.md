@@ -16,7 +16,7 @@ isProject: false
 
 # 12 视觉 MCP
 
-上一阶段是已完成的真实媒体视觉，见 [.cursor/plans/11-real-media-vision.plan.md](.cursor/plans/11-real-media-vision.plan.md)。本文件是阶段 12，落地到 [.cursor/plans/12-vision-mcp.plan.md](.cursor/plans/12-vision-mcp.plan.md)。下一阶段再写 `.cursor/plans/13-workorder-mcp.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.1 节的 `vision-mcp`，以及阶段 07 的「节点只经 Harness 调工具」。目标跟踪、检测可视化、事件入库、批量推理、OpenCV、RTSP、循环视频流、工单、Skill、Kafka 和前端仍不纳入。`get_visual_analysis` 留到事件入库之后。
+上一阶段是已完成的真实媒体视觉，见 [.cursor/plans/11-real-media-vision.plan.md](.cursor/plans/11-real-media-vision.plan.md)。本文件是阶段 12，落地到 [.cursor/plans/12-vision-mcp.plan.md](.cursor/plans/12-vision-mcp.plan.md)。下一阶段是 [.cursor/plans/13-workorder-mcp.plan.md](.cursor/plans/13-workorder-mcp.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.1 节的 `vision-mcp`，以及阶段 07 的「节点只经 Harness 调工具」。目标跟踪、检测可视化、事件入库、批量推理、OpenCV、RTSP、循环视频流、工单、Skill、Kafka 和前端仍不纳入。`get_visual_analysis` 留到事件入库之后。
 
 本阶段只证明一件事：研判里的图片检测和短视频聚合可以走 MCP `tools/call`，入参出参与现在的检测框、时间戳和关键帧一致，且不改变「代码评分、模型不能改风险分」。没有图片、没有视频的报警不调用这两个工具，分数和状态与阶段 11 一致。
 

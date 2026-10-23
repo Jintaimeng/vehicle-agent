@@ -6,13 +6,14 @@ from uuid import uuid4
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from langgraph.types import Command
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from vehicle_agent.config import Settings
 from vehicle_agent.domain.models import Alarm, Detection, HumanReview, JudgementResult
 from vehicle_agent.graph.builder import build_graph
 from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.model import ModelAdapter, OpenAICompatibleModel
+from vehicle_agent.harness.policy import AllowApprovedWritesPolicy
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
 from vehicle_agent.knowledge.index import QdrantRegulationIndex, open_regulation_index
@@ -21,6 +22,7 @@ from vehicle_agent.knowledge.vision import open_vision_index, store_image, store
 from vehicle_agent.mcp.client import open_registered_tools
 from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.repositories.memory import build_seed_repository
+from vehicle_agent.workorders import CreateWorkOrderInput, MemoryWorkOrderStore, WorkOrder
 
 
 class VisionImageView(BaseModel):
@@ -35,12 +37,18 @@ class VisionVideoView(BaseModel):
     keyframe_timestamp_s: float | None = None
 
 
+class WorkOrderPatch(BaseModel):
+    status: str = Field(min_length=1)
+    comment: str = ""
+
+
 class TaskView(BaseModel):
     task_id: str
     status: str
     result: JudgementResult | None = None
     errors: list[dict] = []
     human_review: HumanReview | None = None
+    workorder_id: str | None = None
     interrupts: list[dict] = []
 
 
@@ -66,8 +74,9 @@ def create_app(
         if video_timeline is None
         else video_timeline
     )
+    orders = MemoryWorkOrderStore()
     tools, mcp_session = open_registered_tools(
-        settings, repository, regulations, index, vision, timeline
+        settings, repository, regulations, index, vision, timeline, workorders=orders
     )
 
     @asynccontextmanager
@@ -78,7 +87,10 @@ def create_app(
         _close_index(index)
         _close_index(regulations)
 
-    graph = build_graph(Harness(settings, model, tools), checkpointer)
+    graph = build_graph(
+        Harness(settings, model, tools, policy=AllowApprovedWritesPolicy()),
+        checkpointer,
+    )
     app = FastAPI(title="Vehicle Guard AI", version="0.1.0", lifespan=lifespan)
     app.state.vision_index = vision
     app.state.video_timeline = timeline
@@ -134,6 +146,41 @@ def create_app(
             event_formed=outcome.event is not None,
             keyframe_timestamp_s=keyframe,
         )
+
+    @app.post("/api/v1/workorders", response_model=WorkOrder)
+    def create_workorder(payload: CreateWorkOrderInput) -> WorkOrder:
+        try:
+            return orders.create(
+                task_id=payload.task_id,
+                alarm_id=payload.alarm_id,
+                risk_level=payload.risk_level,
+                summary=payload.summary,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_workorder", "message": str(exc)},
+            ) from exc
+
+    @app.get("/api/v1/workorders/{workorder_id}", response_model=WorkOrder)
+    def get_workorder(workorder_id: str) -> WorkOrder:
+        try:
+            return orders.get(workorder_id)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "not_found", "message": str(exc)},
+            ) from exc
+
+    @app.patch("/api/v1/workorders/{workorder_id}", response_model=WorkOrder)
+    def update_workorder(workorder_id: str, payload: WorkOrderPatch) -> WorkOrder:
+        try:
+            return orders.update(workorder_id, payload.status, payload.comment)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "not_found", "message": str(exc)},
+            ) from exc
 
     @app.post("/api/v1/judgements", response_model=TaskView)
     def create_judgement(alarm: Alarm) -> TaskView:
@@ -239,6 +286,7 @@ def _view(graph, task_id: str) -> TaskView:
         result=values.get("result"),
         errors=values.get("errors", []),
         human_review=values.get("human_review"),
+        workorder_id=values.get("workorder_id"),
         interrupts=interrupts,
     )
 

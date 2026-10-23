@@ -15,6 +15,7 @@ from vehicle_agent.knowledge.index import open_regulation_index
 from vehicle_agent.knowledge.video import open_video_timeline
 from vehicle_agent.knowledge.vision import open_vision_index
 from vehicle_agent.repositories.memory import build_seed_repository
+from vehicle_agent.workorders import MemoryWorkOrderStore
 
 POLICY_DENIED = "policy_denied"
 
@@ -78,6 +79,7 @@ def serve_stdio() -> None:
         vision,
         timeline,
         settings=settings,
+        workorders=MemoryWorkOrderStore(),
     )
     anyio.run(_serve, build_mcp_server(registry))
 
@@ -87,7 +89,10 @@ def _definition(tool: RegisteredTool) -> types.Tool:
         name=tool.name,
         description=tool.description,
         input_schema=tool.input_model.model_json_schema(),
-        annotations=types.ToolAnnotations(read_only_hint=True, idempotent_hint=True),
+        annotations=types.ToolAnnotations(
+            read_only_hint=tool.readonly,
+            idempotent_hint=True,
+        ),
     )
 
 

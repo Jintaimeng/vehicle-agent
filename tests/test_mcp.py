@@ -6,6 +6,7 @@ from vehicle_agent.graph.builder import build_graph
 from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.errors import PolicyDeniedError, ToolExecutionError
 from vehicle_agent.harness.model import FakeModelAdapter
+from vehicle_agent.harness.policy import AllowApprovedWritesPolicy
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.harness.tools import (
     AnalyzeImageInput,
@@ -22,6 +23,9 @@ TOOL_NAMES = (
     "query_vehicle_graph",
     "analyze_image",
     "analyze_video",
+    "create_workorder",
+    "get_workorder",
+    "update_workorder",
 )
 
 
@@ -69,7 +73,7 @@ def test_listed_schemas_match_the_registered_models() -> None:
             assert remote.description == tool.description
             assert remote.input_schema == tool.input_model.model_json_schema()
             assert remote.annotations is not None
-            assert remote.annotations.read_only_hint is True
+            assert remote.annotations.read_only_hint is tool.readonly
             assert remote.annotations.idempotent_hint is True
     finally:
         session.close()
@@ -156,6 +160,7 @@ def test_mcp_judgement_matches_local_scoring(tmp_path) -> None:
                 Settings(max_retries=1, checkpoint_path=str(tmp_path / "checkpoints.sqlite")),
                 FakeModelAdapter(REPORT),
                 tools,
+                policy=AllowApprovedWritesPolicy(),
             ),
             open_checkpointer(tmp_path / "checkpoints.sqlite"),
         )
@@ -185,7 +190,9 @@ def test_mcp_judgement_matches_local_scoring(tmp_path) -> None:
         "list_recent_alarms",
         "search_regulations",
         "query_vehicle_graph",
+        "create_workorder",
     ]
+    assert values["workorder_id"] == f"wo-{alarm.id}"
     assert session.calls == tool_events
 
 
@@ -301,6 +308,7 @@ def test_mcp_image_judgement_matches_local(tmp_path) -> None:
                 Settings(max_retries=1, checkpoint_path=str(tmp_path / "mcp.sqlite")),
                 FakeModelAdapter(REPORT),
                 tools,
+                policy=AllowApprovedWritesPolicy(),
             ),
             open_checkpointer(tmp_path / "mcp.sqlite"),
         )
@@ -316,7 +324,9 @@ def test_mcp_image_judgement_matches_local(tmp_path) -> None:
     assert values["status"] == local["status"] == "completed"
     assert values["risk_score"] == local["risk_score"] == 1.0
     assert values["visible_facts"] == local["visible_facts"]
+    assert values["workorder_id"] == local["workorder_id"] == f"wo-{alarm.id}"
     assert "analyze_image" in session.calls
+    assert "create_workorder" in session.calls
 
 
 def test_mcp_detector_failure_retries_then_reviews(tmp_path) -> None:

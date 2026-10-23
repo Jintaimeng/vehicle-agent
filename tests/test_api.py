@@ -77,6 +77,78 @@ def test_high_risk_judgement(tmp_path) -> None:
     result = response.json()["result"]
     assert result["risk_level"] == "high"
     assert result["alarm_validity"] == "likely_true"
+    assert response.json()["workorder_id"] == f"wo-{response.json()['task_id']}"
+
+
+def test_workorder_api_creates_reads_and_updates(tmp_path) -> None:
+    client = _client(tmp_path)
+    created = client.post(
+        "/api/v1/workorders",
+        json={
+            "task_id": "task_api",
+            "alarm_id": "alarm_api",
+            "risk_level": "high",
+            "summary": "高风险摘要",
+        },
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert body["workorder_id"] == "wo-task_api"
+    assert body["status"] == "open"
+
+    again = client.post(
+        "/api/v1/workorders",
+        json={
+            "task_id": "task_api",
+            "alarm_id": "alarm_api",
+            "risk_level": "high",
+            "summary": "另一份摘要",
+        },
+    )
+    assert again.status_code == 200
+    assert again.json()["workorder_id"] == "wo-task_api"
+    assert again.json()["summary"] == "高风险摘要"
+
+    fetched = client.get("/api/v1/workorders/wo-task_api")
+    assert fetched.status_code == 200
+    assert fetched.json()["alarm_id"] == "alarm_api"
+
+    updated = client.patch(
+        "/api/v1/workorders/wo-task_api",
+        json={"status": "closed", "comment": "已处置"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["status"] == "closed"
+    assert updated.json()["comment"] == "已处置"
+
+    missing = client.get("/api/v1/workorders/wo-missing")
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "not_found"
+
+    rejected = client.post(
+        "/api/v1/workorders",
+        json={
+            "task_id": "task_medium",
+            "alarm_id": "alarm_medium",
+            "risk_level": "medium",
+            "summary": "中风险",
+        },
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["code"] == "invalid_workorder"
+
+
+def test_reviewed_judgement_has_no_workorder(tmp_path) -> None:
+    client = _client(tmp_path)
+    created = client.post("/api/v1/judgements", json=_alarm(vehicle_id="vehicle_missing"))
+    reviewed = client.post(
+        f"/api/v1/judgements/{created.json()['task_id']}/review",
+        json={"reviewer": "ops", "decision": "confirm", "comment": "人工确认"},
+    )
+
+    assert reviewed.status_code == 200
+    assert reviewed.json()["status"] == "completed"
+    assert reviewed.json()["workorder_id"] is None
 
 
 def test_insufficient_evidence_can_be_reviewed(tmp_path) -> None:

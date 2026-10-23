@@ -23,7 +23,7 @@ FastAPI
 
 图谱查询走 `GraphIndex`。默认实现是内存中的固定关系，不依赖数据库。把 `VEHICLE_AGENT_GRAPH_BACKEND` 设为 `neo4j` 后，同一工具改为读取 Neo4j 中的相同事实。查询语句是固定 Cypher，模型只使用已经校验过的 `vehicle_id` 和 `device_id`。
 
-工具通过 `ToolRegistry` 注册。默认 `VEHICLE_AGENT_TOOL_BACKEND=local`，研判直接调用进程内 handler。设为 `mcp` 后，同名工具改为 MCP `tools/call`。`VEHICLE_AGENT_MCP_TRANSPORT` 默认 `memory`，在进程内走 MCP 协议；设为 `stdio` 时拉起 `python -m vehicle_agent.mcp`。调用方角色是 `VEHICLE_AGENT_MCP_ROLE`，默认 `monitor`。六个工具都是只读，可以安全重试。图片检测和短视频聚合也在其中；`tool_backend=mcp` 时它们同样走 `tools/call`。画面复核仍由研判节点比较观察标签，不进入 MCP。
+工具通过 `ToolRegistry` 注册。默认 `VEHICLE_AGENT_TOOL_BACKEND=local`，研判直接调用进程内 handler。设为 `mcp` 后，同名工具改为 MCP `tools/call`。`VEHICLE_AGENT_MCP_TRANSPORT` 默认 `memory`，在进程内走 MCP 协议；设为 `stdio` 时拉起 `python -m vehicle_agent.mcp`。调用方角色是 `VEHICLE_AGENT_MCP_ROLE`，默认 `monitor`。九个工具里，车辆、报警、法规、图谱、图片和视频这六个是只读，可以安全重试。图片检测和短视频聚合也在其中；`tool_backend=mcp` 时它们同样走 `tools/call`。画面复核仍由研判节点比较观察标签，不进入 MCP。工单有 `create_workorder`、`get_workorder` 和 `update_workorder`。读取是只读；创建和更新是写操作。研判只在 `risk_level=high` 且不需要人工复核时，经已授权策略调用 `create_workorder`。同一 `task_id` 重复创建返回原来的工单。创建失败时研判结果仍保留，状态保持 `completed`。中风险和人工复核路径不建单。
 
 图片检测走 `VisionIndex`。报警可以带可选 `image_id`。没有图片时跳过检测，风险分、置信度和复核条件与之前一致。有图片时返回归一化检测框、类别和置信度，并作为 `vision` 证据。画面复核读取与检测分开的观察标签，由代码比较类别；不一致时进入人工复核，不改风险分。`POST /api/v1/vision/images` 用同一检测器，并把图片按 `image_id` 存到本地目录。
 
@@ -35,7 +35,7 @@ FastAPI
 
 短视频默认 `VEHICLE_AGENT_VIDEO_BACKEND=fixture`，仍读定样本时间轴，上传的文件只保存、不解码。设为 `ffmpeg` 后，研判读取已保存的视频，每秒抽出一帧 JPEG，写入同一媒体目录，再走现有连续帧聚合和画面复核。默认测试不调用 FFmpeg。
 
-本阶段不包含神经网络 Embedding、视觉 MCP、目标跟踪、工单 MCP、Kafka 和前端。
+本阶段不包含神经网络 Embedding、目标跟踪、Skill、Kafka 和前端。
 
 ## 环境
 
