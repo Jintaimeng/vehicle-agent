@@ -149,6 +149,27 @@ def build_seed_repository(
             vehicle_type="coach",
             device_id="device_007",
         ),
+        "vehicle_008": Vehicle(
+            id="vehicle_008",
+            plate_number="粤B10293",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_008",
+        ),
+        "vehicle_009": Vehicle(
+            id="vehicle_009",
+            plate_number="粤B38475",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_009",
+        ),
+        "vehicle_010": Vehicle(
+            id="vehicle_010",
+            plate_number="粤B65718",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_010",
+        ),
     }
     drivers = {
         "driver_001": Driver(
@@ -203,6 +224,21 @@ def build_seed_repository(
         ),
         "device_007": Device(
             id="device_007",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
+        "device_008": Device(
+            id="device_008",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
+        "device_009": Device(
+            id="device_009",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
+        "device_010": Device(
+            id="device_010",
             online_status="online",
             last_heartbeat_at=now,
         ),
@@ -272,6 +308,69 @@ def build_seed_repository(
             now - timedelta(minutes=20),
             video_id="video_007_2",
         ),
+        _fatigue(
+            "alarm_008_1",
+            "vehicle_008",
+            "device_008",
+            now - timedelta(minutes=10),
+            video_id="video_008_1",
+            raw_confidence=0.4,
+        ),
+        _fatigue(
+            "alarm_008_2",
+            "vehicle_008",
+            "device_008",
+            now - timedelta(minutes=20),
+            video_id="video_008_2",
+            raw_confidence=0.4,
+        ),
+        _fatigue(
+            "alarm_008_old",
+            "vehicle_008",
+            "device_008",
+            now - timedelta(days=2),
+            raw_confidence=0.9,
+        ),
+        _fatigue(
+            "alarm_009_1",
+            "vehicle_009",
+            "device_009",
+            now - timedelta(minutes=10),
+            video_id="video_009_1",
+            raw_confidence=0.4,
+        ),
+        _fatigue(
+            "alarm_009_2",
+            "vehicle_009",
+            "device_009",
+            now - timedelta(minutes=20),
+            video_id="video_009_2",
+            raw_confidence=0.4,
+        ),
+        _fatigue(
+            "alarm_009_3",
+            "vehicle_009",
+            "device_009",
+            now - timedelta(minutes=30),
+            video_id="video_009_3",
+            raw_confidence=0.4,
+        ),
+        _fatigue(
+            "alarm_010_1",
+            "vehicle_010",
+            "device_010",
+            now - timedelta(minutes=10),
+            video_id="video_010_1",
+            raw_confidence=0.4,
+        ),
+        _fatigue(
+            "alarm_010_2",
+            "vehicle_010",
+            "device_010",
+            now - timedelta(minutes=20),
+            video_id="video_010_2",
+            raw_confidence=0.8,
+        ),
     ]
     firmware = {
         "device_001": "1.4.0",
@@ -281,6 +380,9 @@ def build_seed_repository(
         "device_005": "1.4.0",
         "device_006": "1.4.0",
         "device_007": "1.4.0",
+        "device_008": "1.4.0",
+        "device_009": "1.4.0",
+        "device_010": "1.4.0",
     }
     repairs = [
         RepairRecord(
@@ -319,6 +421,7 @@ def _fatigue(
     alarm_time: datetime,
     *,
     video_id: str | None = None,
+    raw_confidence: float = 0.8,
 ) -> Alarm:
     return Alarm(
         id=alarm_id,
@@ -330,7 +433,7 @@ def _fatigue(
         longitude=113.26,
         latitude=23.12,
         speed_kmh=70,
-        raw_confidence=0.8,
+        raw_confidence=raw_confidence,
         video_id=video_id,
     )
 

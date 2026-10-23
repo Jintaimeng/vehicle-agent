@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from vehicle_agent.domain.models import Device, DeviceMaintenance, Evidence
+from vehicle_agent.domain.models import Alarm, Device, DeviceMaintenance, Evidence
 from vehicle_agent.harness.errors import ToolExecutionError
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.harness.tools import AlarmHistoryOutput, QueryVehicleGraphOutput, ToolRegistry
@@ -16,15 +16,19 @@ DiagnosisCause = Literal[
     "camera_occlusion",
     "frequent_alarms",
     "missing_video",
+    "algorithm_drift",
     "no_device_fault",
 ]
 DiagnosisStepName = Literal["status", "graph", "alarms", "maintenance", "decide"]
 MaintenanceStatus = Literal["hit", "miss", "degraded"]
 AlarmCountStatus = Literal["hit", "miss", "degraded"]
 VideoStatus = Literal["hit", "miss", "degraded"]
+DriftStatus = Literal["hit", "miss", "degraded"]
 _OCCLUSION = "camera_occlusion"
 _FREQUENT_COUNT = 3
 _MISSING_VIDEO_COUNT = 2
+_DRIFT_COUNT = 2
+_LOW_CONFIDENCE = 0.6
 _SAMPLE_AS_OF = datetime(2026, 10, 9, 10, 30, tzinfo=UTC)
 
 
@@ -57,6 +61,7 @@ class DeviceDiagnosis(BaseModel):
     cause: DiagnosisCause | None = None
     alarm_status: AlarmCountStatus | None = None
     video_status: VideoStatus | None = None
+    drift_status: DriftStatus | None = None
     maintenance_status: MaintenanceStatus | None = None
     evidence: list[Evidence]
 
@@ -187,6 +192,7 @@ def diagnose_device(
             evidence=evidence,
             alarm_status="degraded",
             video_status="degraded",
+            drift_status="degraded",
         )
     if not isinstance(history, AlarmHistoryOutput):
         if prior is None:
@@ -199,20 +205,26 @@ def diagnose_device(
             evidence=evidence,
             alarm_status="degraded",
             video_status="degraded",
+            drift_status="degraded",
         )
     matched = [item for item in history.alarms if item.device_id == device_id]
     count = len(matched)
     missing = len([item for item in matched if not item.video_id])
+    low = len([item for item in matched if _is_low_confidence(item)])
     evidence.append(_alarm_evidence(device_id, count))
     evidence.append(_missing_video_evidence(device_id, missing))
+    evidence.append(_drift_evidence(device_id, low))
     alarm_status: AlarmCountStatus = "hit" if count >= _FREQUENT_COUNT else "miss"
     video_status: VideoStatus = "hit" if _missing_video(count, missing) else "miss"
+    drift_status: DriftStatus = "hit" if _algorithm_drift(count, low) else "miss"
     if prior is not None:
         cause = prior
     elif count >= _FREQUENT_COUNT:
         cause = "frequent_alarms"
     elif _missing_video(count, missing):
         cause = "missing_video"
+    elif _algorithm_drift(count, low):
+        cause = "algorithm_drift"
     else:
         cause = "no_device_fault"
     return _with_maintenance(
@@ -223,6 +235,7 @@ def diagnose_device(
         evidence=evidence,
         alarm_status=alarm_status,
         video_status=video_status,
+        drift_status=drift_status,
     )
 
 
@@ -235,6 +248,7 @@ def _with_maintenance(
     evidence: list[Evidence],
     alarm_status: AlarmCountStatus,
     video_status: VideoStatus,
+    drift_status: DriftStatus,
 ) -> DeviceDiagnosis:
     try:
         maintenance = harness.call_tool(
@@ -251,6 +265,7 @@ def _with_maintenance(
             cause=cause,
             alarm_status=alarm_status,
             video_status=video_status,
+            drift_status=drift_status,
             maintenance_status="degraded",
             evidence=evidence,
         )
@@ -262,6 +277,7 @@ def _with_maintenance(
             cause=cause,
             alarm_status=alarm_status,
             video_status=video_status,
+            drift_status=drift_status,
             maintenance_status="degraded",
             evidence=evidence,
         )
@@ -272,6 +288,7 @@ def _with_maintenance(
         cause=cause,
         alarm_status=alarm_status,
         video_status=video_status,
+        drift_status=drift_status,
         maintenance_status="hit" if maintenance.repair is not None else "miss",
         evidence=[*evidence, *_maintenance_evidence(maintenance)],
     )
@@ -291,6 +308,14 @@ def _missing_video(count: int, missing: int) -> bool:
     return count >= _MISSING_VIDEO_COUNT and missing == count
 
 
+def _algorithm_drift(count: int, low: int) -> bool:
+    return count >= _DRIFT_COUNT and low == count
+
+
+def _is_low_confidence(alarm: Alarm) -> bool:
+    return bool(alarm.video_id) and alarm.raw_confidence < _LOW_CONFIDENCE
+
+
 def _alarm_evidence(device_id: str, count: int) -> Evidence:
     return Evidence(
         type="history",
@@ -304,6 +329,14 @@ def _missing_video_evidence(device_id: str, missing: int) -> Evidence:
         type="history",
         source="alarm_history",
         description=f"设备 {device_id} 在 1 日内有 {missing} 次报警缺少视频",
+    )
+
+
+def _drift_evidence(device_id: str, low: int) -> Evidence:
+    return Evidence(
+        type="history",
+        source="alarm_history",
+        description=f"设备 {device_id} 在 1 日内有 {low} 次低置信度报警",
     )
 
 

@@ -95,7 +95,9 @@ def test_online_clear_device_has_no_fault() -> None:
         for item in result.evidence
     )
     assert any("1 日内有 0 次报警缺少视频" in item.description for item in result.evidence)
+    assert any("1 日内有 0 次低置信度报警" in item.description for item in result.evidence)
     assert result.video_status == "miss"
+    assert result.drift_status == "miss"
     assert any("固件 1.4.0" in item.description for item in result.evidence)
     assert any("无维修记录" in item.description for item in result.evidence)
 
@@ -151,6 +153,8 @@ def test_frequent_online_device_counts_only_the_last_day() -> None:
         for item in result.evidence
     )
     assert any("1 日内有 3 次报警缺少视频" in item.description for item in result.evidence)
+    assert any("1 日内有 0 次低置信度报警" in item.description for item in result.evidence)
+    assert result.drift_status == "miss"
 
 
 class _BrokenHistory:
@@ -191,6 +195,7 @@ def test_alarm_history_failure_keeps_known_causes() -> None:
     assert known.cause == "offline"
     assert known.alarm_status == "degraded"
     assert known.video_status == "degraded"
+    assert known.drift_status == "degraded"
     assert all("次报警" not in item.description for item in known.evidence)
     assert "get_device_maintenance" in known_names
 
@@ -211,6 +216,8 @@ def test_missing_video_requires_every_recent_alarm() -> None:
         for item in missing.evidence
     )
     assert any("1 日内有 2 次报警缺少视频" in item.description for item in missing.evidence)
+    assert any("1 日内有 0 次低置信度报警" in item.description for item in missing.evidence)
+    assert missing.drift_status == "miss"
     assert any("固件 1.4.0" in item.description for item in missing.evidence)
     assert mixed.cause == "no_device_fault"
     assert mixed.video_status == "miss"
@@ -231,6 +238,51 @@ def test_missing_video_history_failure_does_not_guess() -> None:
     assert result.status == "degraded"
     assert result.cause is None
     assert result.video_status is None
+    assert "get_device_maintenance" not in [event.name for event in harness.tracer.events]
+
+
+def test_algorithm_drift_requires_every_recent_alarm() -> None:
+    harness, repository = _harness()
+
+    drifted = diagnose_device(harness, repository, "device_008")
+    frequent = diagnose_device(harness, repository, "device_009")
+    mixed_harness, mixed_repository = _harness()
+    mixed = diagnose_device(mixed_harness, mixed_repository, "device_010")
+
+    assert drifted.status == "completed"
+    assert drifted.cause == "algorithm_drift"
+    assert drifted.alarm_status == "miss"
+    assert drifted.video_status == "miss"
+    assert drifted.drift_status == "hit"
+    assert drifted.maintenance_status == "miss"
+    assert any(
+        "1 日内有 2 次报警" in item.description and "缺少视频" not in item.description
+        for item in drifted.evidence
+    )
+    assert any("1 日内有 2 次低置信度报警" in item.description for item in drifted.evidence)
+    assert any("固件 1.4.0" in item.description for item in drifted.evidence)
+    assert frequent.cause == "frequent_alarms"
+    assert frequent.drift_status == "hit"
+    assert any("1 日内有 3 次低置信度报警" in item.description for item in frequent.evidence)
+    assert mixed.cause == "no_device_fault"
+    assert mixed.drift_status == "miss"
+    assert any("1 日内有 1 次低置信度报警" in item.description for item in mixed.evidence)
+
+
+def test_algorithm_drift_history_failure_does_not_guess() -> None:
+    repository = build_seed_repository()
+    broken = _BrokenHistory(repository)
+    harness = Harness(
+        Settings(max_retries=0, checkpoint_path="data/test-checkpoints.sqlite"),
+        FakeModelAdapter("{}"),
+        build_vehicle_tools(broken),
+    )
+
+    result = diagnose_device(harness, broken, "device_008")
+
+    assert result.status == "degraded"
+    assert result.cause is None
+    assert result.drift_status is None
     assert "get_device_maintenance" not in [event.name for event in harness.tracer.events]
 
 
