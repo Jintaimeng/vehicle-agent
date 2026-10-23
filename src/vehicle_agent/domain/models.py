@@ -31,6 +31,12 @@ class Driver(BaseModel):
     enterprise_id: str
 
 
+class Device(BaseModel):
+    id: str
+    online_status: Literal["online", "offline"]
+    last_heartbeat_at: datetime
+
+
 class Alarm(BaseModel):
     id: str
     vehicle_id: str

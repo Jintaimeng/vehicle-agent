@@ -6,7 +6,7 @@ from typing import TypeVar
 from pydantic import BaseModel, Field
 
 from vehicle_agent.config import Settings
-from vehicle_agent.domain.models import Alarm, Detection, Driver, Vehicle
+from vehicle_agent.domain.models import Alarm, Detection, Device, Driver, Vehicle
 from vehicle_agent.knowledge.graph import GraphFact, GraphIndex, seed_graph_index
 from vehicle_agent.knowledge.index import (
     RegulationIndex,
@@ -89,6 +89,10 @@ class ListRecentAlarmsInput(BaseModel):
 
 class AlarmHistoryOutput(BaseModel):
     alarms: list[Alarm]
+
+
+class GetDeviceStatusInput(BaseModel):
+    device_id: str
 
 
 class SearchRegulationsInput(BaseModel):
@@ -178,6 +182,20 @@ def build_vehicle_tools(
             input_model=ListRecentAlarmsInput,
             output_model=AlarmHistoryOutput,
             handler=list_recent_alarms,
+            required_role="monitor",
+        )
+    )
+
+    def get_device_status(payload: GetDeviceStatusInput) -> Device:
+        return repository.get_device(payload.device_id)
+
+    registry.register(
+        RegisteredTool(
+            name="get_device_status",
+            description="查询设备在线状态和最后心跳时间",
+            input_model=GetDeviceStatusInput,
+            output_model=Device,
+            handler=get_device_status,
             required_role="monitor",
         )
     )

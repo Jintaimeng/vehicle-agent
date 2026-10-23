@@ -16,7 +16,7 @@ isProject: false
 
 # 14 报警核验 Skill
 
-上一阶段是已完成的工单 MCP，见 [.cursor/plans/13-workorder-mcp.plan.md](.cursor/plans/13-workorder-mcp.plan.md)。本文件是阶段 14，落地到 [.cursor/plans/14-alarm-verification-skill.plan.md](.cursor/plans/14-alarm-verification-skill.plan.md)。下一阶段再写 `.cursor/plans/15-device-diagnosis-skill.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.2 节的 `alarm-verification`：组合车辆查询、历史报警、视觉分析、规则检索和图谱查询，判断报警真实性。风险画像、设备诊断、根因分析、运营报告、`get_visual_analysis`、事件入库、目标跟踪、OpenCV、RTSP、Kafka 和前端仍不纳入。
+上一阶段是已完成的工单 MCP，见 [.cursor/plans/13-workorder-mcp.plan.md](.cursor/plans/13-workorder-mcp.plan.md)。本文件是阶段 14，落地到 [.cursor/plans/14-alarm-verification-skill.plan.md](.cursor/plans/14-alarm-verification-skill.plan.md)。下一阶段是 [.cursor/plans/15-device-online-status.plan.md](.cursor/plans/15-device-online-status.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.2 节的 `alarm-verification`：组合车辆查询、历史报警、视觉分析、规则检索和图谱查询，判断报警真实性。风险画像、设备诊断、根因分析、运营报告、`get_visual_analysis`、事件入库、目标跟踪、OpenCV、RTSP、Kafka 和前端仍不纳入。
 
 本阶段只证明一件事：现有疲劳驾驶研判可以声明成一份 Skill。触发、步骤、工具、输出、失败处理和评测案例都在这份定义里。执行仍是 [src/vehicle_agent/graph/builder.py](src/vehicle_agent/graph/builder.py) 的固定图，工具仍经 Harness。模型不能选择步骤，也不能改风险分或决定是否建单。`risk_score`、复核条件和 `prompt_version`（`report-v6`）不变。
 

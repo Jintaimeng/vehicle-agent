@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from vehicle_agent.domain.models import Alarm, Driver, Vehicle
+from vehicle_agent.domain.models import Alarm, Device, Driver, Vehicle
 
 
 class MemoryAlarmRepository:
@@ -12,11 +12,15 @@ class MemoryAlarmRepository:
         drivers: dict[str, Driver],
         alarms: list[Alarm],
         failing_vehicle_ids: set[str] | None = None,
+        devices: dict[str, Device] | None = None,
+        failing_device_ids: set[str] | None = None,
     ) -> None:
         self._vehicles = vehicles
         self._drivers = drivers
         self._alarms = alarms
+        self._devices = devices or {}
         self._failing_vehicle_ids = failing_vehicle_ids or set()
+        self._failing_device_ids = failing_device_ids or set()
 
     def get_vehicle(self, vehicle_id: str) -> Vehicle | None:
         self._raise_if_unavailable(vehicle_id)
@@ -24,6 +28,14 @@ class MemoryAlarmRepository:
 
     def get_driver(self, driver_id: str) -> Driver | None:
         return self._drivers.get(driver_id)
+
+    def get_device(self, device_id: str) -> Device:
+        if device_id in self._failing_device_ids:
+            raise ConnectionError(f"device store unavailable for {device_id}")
+        try:
+            return self._devices[device_id]
+        except KeyError as exc:
+            raise KeyError(f"unknown device: {device_id}") from exc
 
     def list_recent_alarms(
         self,
@@ -92,6 +104,23 @@ def build_seed_repository() -> MemoryAlarmRepository:
             enterprise_id="enterprise_001",
         ),
     }
+    devices = {
+        "device_001": Device(
+            id="device_001",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
+        "device_002": Device(
+            id="device_002",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
+        "device_003": Device(
+            id="device_003",
+            online_status="offline",
+            last_heartbeat_at=now - timedelta(days=2),
+        ),
+    }
     history = [
         Alarm(
             id="alarm_hist_001",
@@ -118,4 +147,11 @@ def build_seed_repository() -> MemoryAlarmRepository:
             raw_confidence=0.77,
         ),
     ]
-    return MemoryAlarmRepository(vehicles, drivers, history, failing_vehicle_ids={"vehicle_error"})
+    return MemoryAlarmRepository(
+        vehicles,
+        drivers,
+        history,
+        failing_vehicle_ids={"vehicle_error"},
+        devices=devices,
+        failing_device_ids={"device_error"},
+    )

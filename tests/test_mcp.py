@@ -10,6 +10,7 @@ from vehicle_agent.harness.policy import AllowApprovedWritesPolicy
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.harness.tools import (
     AnalyzeImageInput,
+    GetDeviceStatusInput,
     SearchRegulationsInput,
     build_vehicle_tools,
 )
@@ -23,6 +24,7 @@ TOOL_NAMES = (
     "query_vehicle_graph",
     "analyze_image",
     "analyze_video",
+    "get_device_status",
     "create_workorder",
     "get_workorder",
     "update_workorder",
@@ -101,6 +103,19 @@ def test_analyze_image_matches_the_local_registry() -> None:
         )
         assert remote == local.model_dump(mode="json")
         assert remote["detections"][0]["label"] == "closed_eye"
+    finally:
+        session.close()
+
+
+def test_device_status_matches_the_local_registry() -> None:
+    session, registry = _session()
+    try:
+        remote = session.call("get_device_status", {"device_id": "device_003"})
+        local = registry.get("get_device_status").handler(
+            GetDeviceStatusInput(device_id="device_003")
+        )
+        assert remote == local.model_dump(mode="json")
+        assert remote["online_status"] == "offline"
     finally:
         session.close()
 
