@@ -16,7 +16,7 @@ isProject: false
 
 # 18 设备频繁报警
 
-上一阶段是已完成的固件与维修记录，见 [.cursor/plans/17-device-firmware-repair.plan.md](.cursor/plans/17-device-firmware-repair.plan.md)。本文件是阶段 18，落地到 [.cursor/plans/18-frequent-device-alarms.plan.md](.cursor/plans/18-frequent-device-alarms.plan.md)。下一阶段再写 `.cursor/plans/19-missing-video.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 4.3 节里的短时间大量报警。视频缺失、算法漂移、风险画像、根因分析、运营报告、Kafka 和前端仍不纳入。
+上一阶段是已完成的固件与维修记录，见 [.cursor/plans/17-device-firmware-repair.plan.md](.cursor/plans/17-device-firmware-repair.plan.md)。本文件是阶段 18，落地到 [.cursor/plans/18-frequent-device-alarms.plan.md](.cursor/plans/18-frequent-device-alarms.plan.md)。下一阶段是 [.cursor/plans/19-missing-video.plan.md](.cursor/plans/19-missing-video.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 4.3 节里的短时间大量报警。视频缺失、算法漂移、风险画像、根因分析、运营报告、Kafka 和前端仍不纳入。
 
 本阶段只证明一件事：给定设备标识，代码可以数出固定时间窗里的报警次数，并在在线且没有遮挡时把达到阈值的结果当成原因 `frequent_alarms`。统计复用已有只读工具 `list_recent_alarms`，不改它的入参。模型不选择步骤，也不改原因。疲劳驾驶研判图不因此多调工具。`risk_score`、复核条件、是否建单和 `prompt_version`（`report-v6`）不变。`alarm-verification` 仍是原来六个只读工具。工具数仍是十一个。
 

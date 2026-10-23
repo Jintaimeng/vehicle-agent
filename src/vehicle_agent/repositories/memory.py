@@ -135,6 +135,20 @@ def build_seed_repository(
             vehicle_type="coach",
             device_id="device_005",
         ),
+        "vehicle_006": Vehicle(
+            id="vehicle_006",
+            plate_number="粤B86420",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_006",
+        ),
+        "vehicle_007": Vehicle(
+            id="vehicle_007",
+            plate_number="粤B97531",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_007",
+        ),
     }
     drivers = {
         "driver_001": Driver(
@@ -182,6 +196,16 @@ def build_seed_repository(
             online_status="online",
             last_heartbeat_at=now,
         ),
+        "device_006": Device(
+            id="device_006",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
+        "device_007": Device(
+            id="device_007",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
     }
     history = [
         Alarm(
@@ -216,6 +240,38 @@ def build_seed_repository(
             "device_005",
             now - timedelta(days=2),
         ),
+        _fatigue(
+            "alarm_006_1",
+            "vehicle_006",
+            "device_006",
+            now - timedelta(minutes=10),
+        ),
+        _fatigue(
+            "alarm_006_2",
+            "vehicle_006",
+            "device_006",
+            now - timedelta(minutes=20),
+        ),
+        _fatigue(
+            "alarm_006_old",
+            "vehicle_006",
+            "device_006",
+            now - timedelta(days=2),
+            video_id="video_006_old",
+        ),
+        _fatigue(
+            "alarm_007_1",
+            "vehicle_007",
+            "device_007",
+            now - timedelta(minutes=10),
+        ),
+        _fatigue(
+            "alarm_007_2",
+            "vehicle_007",
+            "device_007",
+            now - timedelta(minutes=20),
+            video_id="video_007_2",
+        ),
     ]
     firmware = {
         "device_001": "1.4.0",
@@ -223,6 +279,8 @@ def build_seed_repository(
         "device_003": "1.2.0",
         "device_004": "1.3.0",
         "device_005": "1.4.0",
+        "device_006": "1.4.0",
+        "device_007": "1.4.0",
     }
     repairs = [
         RepairRecord(
@@ -254,7 +312,14 @@ def build_seed_repository(
     )
 
 
-def _fatigue(alarm_id: str, vehicle_id: str, device_id: str, alarm_time: datetime) -> Alarm:
+def _fatigue(
+    alarm_id: str,
+    vehicle_id: str,
+    device_id: str,
+    alarm_time: datetime,
+    *,
+    video_id: str | None = None,
+) -> Alarm:
     return Alarm(
         id=alarm_id,
         vehicle_id=vehicle_id,
@@ -266,6 +331,7 @@ def _fatigue(alarm_id: str, vehicle_id: str, device_id: str, alarm_time: datetim
         latitude=23.12,
         speed_kmh=70,
         raw_confidence=0.8,
+        video_id=video_id,
     )
 
 

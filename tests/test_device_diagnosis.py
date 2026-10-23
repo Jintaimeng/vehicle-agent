@@ -41,7 +41,9 @@ def test_offline_device_keeps_occlusion_as_evidence() -> None:
     assert result.skill_id == "device-diagnosis"
     assert any("离线" in item and "2026-10-07T10:30:00Z" in item for item in descriptions)
     assert any("摄像头遮挡" in item for item in descriptions)
-    assert any("1 日内有 0 次报警" in item for item in descriptions)
+    assert any("1 日内有 0 次报警" in item and "缺少视频" not in item for item in descriptions)
+    assert any("1 日内有 0 次报警缺少视频" in item for item in descriptions)
+    assert result.video_status == "miss"
     assert any("固件 1.2.0" in item for item in descriptions)
     assert any("repair_003_open" in item and "未关闭" in item for item in descriptions)
     assert all("repair_003_closed" not in item for item in descriptions)
@@ -61,17 +63,20 @@ def test_online_occluded_device_is_camera_occlusion() -> None:
 
     result = diagnose_device(harness, repository, "device_004")
 
-    assert ("has_fault", "camera_occlusion") in [
-        (item.relation, item.target_id) for item in facts
-    ]
+    assert ("has_fault", "camera_occlusion") in [(item.relation, item.target_id) for item in facts]
     assert repository.get_device("device_004").last_heartbeat_at == NOW
     assert result.cause == "camera_occlusion"
     assert result.alarm_status == "hit"
+    assert result.video_status == "hit"
     assert result.maintenance_status == "miss"
     assert any(
         item.type == "graph" and "摄像头遮挡" in item.description for item in result.evidence
     )
-    assert any("1 日内有 3 次报警" in item.description for item in result.evidence)
+    assert any(
+        "1 日内有 3 次报警" in item.description and "缺少视频" not in item.description
+        for item in result.evidence
+    )
+    assert any("1 日内有 3 次报警缺少视频" in item.description for item in result.evidence)
     assert any("固件 1.3.0" in item.description for item in result.evidence)
     assert any("无维修记录" in item.description for item in result.evidence)
 
@@ -85,7 +90,12 @@ def test_online_clear_device_has_no_fault() -> None:
     assert result.alarm_status == "miss"
     assert result.maintenance_status == "miss"
     assert all(item.type != "graph" for item in result.evidence)
-    assert any("1 日内有 0 次报警" in item.description for item in result.evidence)
+    assert any(
+        "1 日内有 0 次报警" in item.description and "缺少视频" not in item.description
+        for item in result.evidence
+    )
+    assert any("1 日内有 0 次报警缺少视频" in item.description for item in result.evidence)
+    assert result.video_status == "miss"
     assert any("固件 1.4.0" in item.description for item in result.evidence)
     assert any("无维修记录" in item.description for item in result.evidence)
 
@@ -135,7 +145,12 @@ def test_frequent_online_device_counts_only_the_last_day() -> None:
     assert result.status == "completed"
     assert result.cause == "frequent_alarms"
     assert result.alarm_status == "hit"
-    assert any("1 日内有 3 次报警" in item.description for item in result.evidence)
+    assert result.video_status == "hit"
+    assert any(
+        "1 日内有 3 次报警" in item.description and "缺少视频" not in item.description
+        for item in result.evidence
+    )
+    assert any("1 日内有 3 次报警缺少视频" in item.description for item in result.evidence)
 
 
 class _BrokenHistory:
@@ -175,8 +190,48 @@ def test_alarm_history_failure_keeps_known_causes() -> None:
     assert known.status == "completed"
     assert known.cause == "offline"
     assert known.alarm_status == "degraded"
+    assert known.video_status == "degraded"
     assert all("次报警" not in item.description for item in known.evidence)
     assert "get_device_maintenance" in known_names
+
+
+def test_missing_video_requires_every_recent_alarm() -> None:
+    harness, repository = _harness()
+
+    missing = diagnose_device(harness, repository, "device_006")
+    mixed = diagnose_device(harness, repository, "device_007")
+
+    assert missing.status == "completed"
+    assert missing.cause == "missing_video"
+    assert missing.alarm_status == "miss"
+    assert missing.video_status == "hit"
+    assert missing.maintenance_status == "miss"
+    assert any(
+        "1 日内有 2 次报警" in item.description and "缺少视频" not in item.description
+        for item in missing.evidence
+    )
+    assert any("1 日内有 2 次报警缺少视频" in item.description for item in missing.evidence)
+    assert any("固件 1.4.0" in item.description for item in missing.evidence)
+    assert mixed.cause == "no_device_fault"
+    assert mixed.video_status == "miss"
+    assert any("1 日内有 1 次报警缺少视频" in item.description for item in mixed.evidence)
+
+
+def test_missing_video_history_failure_does_not_guess() -> None:
+    repository = build_seed_repository()
+    broken = _BrokenHistory(repository)
+    harness = Harness(
+        Settings(max_retries=0, checkpoint_path="data/test-checkpoints.sqlite"),
+        FakeModelAdapter("{}"),
+        build_vehicle_tools(broken),
+    )
+
+    result = diagnose_device(harness, broken, "device_006")
+
+    assert result.status == "degraded"
+    assert result.cause is None
+    assert result.video_status is None
+    assert "get_device_maintenance" not in [event.name for event in harness.tracer.events]
 
 
 def test_diagnosis_tools_stay_out_of_alarm_verification() -> None:
