@@ -170,6 +170,20 @@ def build_seed_repository(
             vehicle_type="coach",
             device_id="device_010",
         ),
+        "vehicle_011": Vehicle(
+            id="vehicle_011",
+            plate_number="粤B21930",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_011",
+        ),
+        "vehicle_012": Vehicle(
+            id="vehicle_012",
+            plate_number="粤B54607",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_012",
+        ),
     }
     drivers = {
         "driver_001": Driver(
@@ -239,6 +253,16 @@ def build_seed_repository(
         ),
         "device_010": Device(
             id="device_010",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
+        "device_011": Device(
+            id="device_011",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
+        "device_012": Device(
+            id="device_012",
             online_status="online",
             last_heartbeat_at=now,
         ),
@@ -371,6 +395,20 @@ def build_seed_repository(
             video_id="video_010_2",
             raw_confidence=0.8,
         ),
+        _fatigue(
+            "alarm_011_1",
+            "vehicle_011",
+            "device_011",
+            now - timedelta(minutes=10),
+            speed_kmh=70,
+        ),
+        _fatigue(
+            "alarm_012_1",
+            "vehicle_012",
+            "device_012",
+            now - timedelta(minutes=10),
+            speed_kmh=85,
+        ),
     ]
     firmware = {
         "device_001": "1.4.0",
@@ -383,6 +421,8 @@ def build_seed_repository(
         "device_008": "1.4.0",
         "device_009": "1.4.0",
         "device_010": "1.4.0",
+        "device_011": "1.4.0",
+        "device_012": "1.4.0",
     }
     repairs = [
         RepairRecord(
@@ -399,6 +439,13 @@ def build_seed_repository(
             fault="camera_occlusion",
             status="open",
             opened_at=datetime(2026, 10, 6, 10, 30, tzinfo=UTC),
+        ),
+        RepairRecord(
+            id="repair_012_open",
+            device_id="device_012",
+            fault="camera_occlusion",
+            status="open",
+            opened_at=datetime(2026, 10, 8, 10, 30, tzinfo=UTC),
         ),
     ]
     return MemoryAlarmRepository(
@@ -422,6 +469,7 @@ def _fatigue(
     *,
     video_id: str | None = None,
     raw_confidence: float = 0.8,
+    speed_kmh: float = 70,
 ) -> Alarm:
     return Alarm(
         id=alarm_id,
@@ -432,7 +480,7 @@ def _fatigue(
         alarm_time=alarm_time,
         longitude=113.26,
         latitude=23.12,
-        speed_kmh=70,
+        speed_kmh=speed_kmh,
         raw_confidence=raw_confidence,
         video_id=video_id,
     )

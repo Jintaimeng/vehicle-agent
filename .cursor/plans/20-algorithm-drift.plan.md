@@ -16,7 +16,7 @@ isProject: false
 
 # 20 设备算法漂移
 
-上一阶段是已完成的视频缺失，见 [.cursor/plans/19-missing-video.plan.md](.cursor/plans/19-missing-video.plan.md)。本文件是阶段 20，落地到 [.cursor/plans/20-algorithm-drift.plan.md](.cursor/plans/20-algorithm-drift.plan.md)。下一阶段再写 `.cursor/plans/21-vehicle-risk-profile.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 4.3 节里尚未落地的算法漂移。风险画像、根因分析、运营报告、Kafka 和前端仍不纳入。
+上一阶段是已完成的视频缺失，见 [.cursor/plans/19-missing-video.plan.md](.cursor/plans/19-missing-video.plan.md)。本文件是阶段 20，落地到 [.cursor/plans/20-algorithm-drift.plan.md](.cursor/plans/20-algorithm-drift.plan.md)。下一阶段是 [.cursor/plans/21-vehicle-risk-profile.plan.md](.cursor/plans/21-vehicle-risk-profile.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 4.3 节里尚未落地的算法漂移。风险画像、根因分析、运营报告、Kafka 和前端仍不纳入。
 
 本阶段只证明一件事：给定设备标识，代码可以从已返回的报警里数出 1 日内带有 `video_id` 且 `raw_confidence` 低于 0.6 的次数，并在离线、遮挡、频繁报警和视频缺失都不成立时，把全部低置信度写成原因 `algorithm_drift`。0.6 与 [src/vehicle_agent/graph/scoring.py](src/vehicle_agent/graph/scoring.py) 里置信度加分的下界相同，等于 0.6 不算低。统计仍复用只读工具 `list_recent_alarms`，不改它的入参。固件和维修仍只写入证据，不参与定因。模型不选择步骤，也不改原因。疲劳驾驶研判图不因此多调工具。`risk_score`、复核条件、是否建单和 `prompt_version`（`report-v6`）不变。`alarm-verification` 仍是原来六个只读工具。工具数仍是十一个。
 
