@@ -5,6 +5,7 @@ from vehicle_agent.domain.models import AlarmValidity, RiskLevel
 
 class JudgementState(TypedDict, total=False):
     task_id: str
+    skill_id: str
     alarm: dict
     vehicle_context: dict | None
     driver_context: dict | None

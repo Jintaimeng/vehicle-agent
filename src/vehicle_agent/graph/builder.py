@@ -5,6 +5,19 @@ from vehicle_agent.graph.nodes import make_nodes
 from vehicle_agent.graph.state import JudgementState, Route
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.vision import ObservationSource, open_observation
+from vehicle_agent.skills.alarm_verification import check_alarm_verification_skill
+
+_NODE_ORDER = [
+    "validate",
+    "context",
+    "history",
+    "retrieve",
+    "graph",
+    "vision",
+    "score",
+    "review",
+    "report",
+]
 
 
 def build_graph(
@@ -12,18 +25,12 @@ def build_graph(
     checkpointer: SqliteSaver,
     observation: ObservationSource | None = None,
 ):
+    check_alarm_verification_skill(harness.tools, _NODE_ORDER)
     observer = observation if observation is not None else open_observation(harness)
     nodes = make_nodes(harness, observer)
     graph = StateGraph(JudgementState)
-    graph.add_node("validate", nodes["validate"])
-    graph.add_node("context", nodes["context"])
-    graph.add_node("history", nodes["history"])
-    graph.add_node("retrieve", nodes["retrieve"])
-    graph.add_node("graph", nodes["graph"])
-    graph.add_node("vision", nodes["vision"])
-    graph.add_node("score", nodes["score"])
-    graph.add_node("review", nodes["review"])
-    graph.add_node("report", nodes["report"])
+    for name in _NODE_ORDER:
+        graph.add_node(name, nodes[name])
 
     graph.add_edge(START, "validate")
     graph.add_conditional_edges("validate", _after_validate, {"context": "context", "end": END})

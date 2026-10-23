@@ -35,7 +35,9 @@ FastAPI
 
 短视频默认 `VEHICLE_AGENT_VIDEO_BACKEND=fixture`，仍读定样本时间轴，上传的文件只保存、不解码。设为 `ffmpeg` 后，研判读取已保存的视频，每秒抽出一帧 JPEG，写入同一媒体目录，再走现有连续帧聚合和画面复核。默认测试不调用 FFmpeg。
 
-本阶段不包含神经网络 Embedding、目标跟踪、Skill、Kafka 和前端。
+疲劳驾驶研判由 `alarm-verification` 声明。触发条件是 `driver_fatigue`。执行仍是上面的固定图，模型不选择步骤，也不改风险分或是否建单。Skill 只包含六个只读工具：车辆资料、历史报警、法规检索、图谱查询、图片检测和短视频聚合。有视频时只分析视频，否则有图片时才分析图片。建单仍在报告节点里，不在这份 Skill 中。
+
+本阶段不包含其他 Skill、神经网络 Embedding、目标跟踪、Kafka 和前端。
 
 ## 环境
 

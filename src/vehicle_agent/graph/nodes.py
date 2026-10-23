@@ -19,6 +19,7 @@ from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import GraphFact
 from vehicle_agent.knowledge.index import RegulationSnippet
 from vehicle_agent.knowledge.vision import ObservationSource, compare_observation
+from vehicle_agent.skills.alarm_verification import ALARM_VERIFICATION
 
 
 class ReportDraft(BaseModel):
@@ -41,11 +42,26 @@ def make_nodes(
         return traced({"status": "failed", "errors": errors})
 
     def validate(state: JudgementState) -> dict:
+        raw = state.get("alarm")
+        if isinstance(raw, dict):
+            alarm_type = raw.get("alarm_type")
+            if isinstance(alarm_type, str) and not ALARM_VERIFICATION.matches(alarm_type):
+                return failed(
+                    state,
+                    "skill_not_applicable",
+                    "alarm does not match alarm-verification",
+                )
         try:
             alarm = Alarm.model_validate(state["alarm"])
         except ValidationError as exc:
             return failed(state, "invalid_alarm", str(exc))
-        return traced({"status": "running", "alarm": alarm.model_dump(mode="json")})
+        return traced(
+            {
+                "status": "running",
+                "skill_id": ALARM_VERIFICATION.id,
+                "alarm": alarm.model_dump(mode="json"),
+            }
+        )
 
     def load_context(state: JudgementState) -> dict:
         alarm = Alarm.model_validate(state["alarm"])
