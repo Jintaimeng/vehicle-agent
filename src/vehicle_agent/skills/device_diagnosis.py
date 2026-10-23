@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -5,15 +6,18 @@ from pydantic import BaseModel
 from vehicle_agent.domain.models import Device, DeviceMaintenance, Evidence
 from vehicle_agent.harness.errors import ToolExecutionError
 from vehicle_agent.harness.runtime import Harness
-from vehicle_agent.harness.tools import QueryVehicleGraphOutput, ToolRegistry
+from vehicle_agent.harness.tools import AlarmHistoryOutput, QueryVehicleGraphOutput, ToolRegistry
 from vehicle_agent.knowledge.graph import GraphFact
 from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.skills.alarm_verification import ALARM_VERIFICATION
 
-DiagnosisCause = Literal["offline", "camera_occlusion", "no_device_fault"]
-DiagnosisStepName = Literal["status", "graph", "maintenance", "decide"]
+DiagnosisCause = Literal["offline", "camera_occlusion", "frequent_alarms", "no_device_fault"]
+DiagnosisStepName = Literal["status", "graph", "alarms", "maintenance", "decide"]
 MaintenanceStatus = Literal["hit", "miss", "degraded"]
+AlarmCountStatus = Literal["hit", "miss", "degraded"]
 _OCCLUSION = "camera_occlusion"
+_FREQUENT_COUNT = 3
+_SAMPLE_AS_OF = datetime(2026, 10, 9, 10, 30, tzinfo=UTC)
 
 
 class DiagnosisStep(BaseModel):
@@ -43,6 +47,7 @@ class DeviceDiagnosis(BaseModel):
     device_id: str
     status: Literal["completed", "degraded"]
     cause: DiagnosisCause | None = None
+    alarm_status: AlarmCountStatus | None = None
     maintenance_status: MaintenanceStatus | None = None
     evidence: list[Evidence]
 
@@ -63,10 +68,16 @@ DEVICE_DIAGNOSIS = DeviceDiagnosisSkill(
     steps=[
         DiagnosisStep(name="status", tool="get_device_status", on_failure="degrade"),
         DiagnosisStep(name="graph", tool="query_vehicle_graph", on_failure="degrade"),
+        DiagnosisStep(name="alarms", tool="list_recent_alarms"),
         DiagnosisStep(name="maintenance", tool="get_device_maintenance"),
         DiagnosisStep(name="decide"),
     ],
-    tools=["get_device_status", "query_vehicle_graph", "get_device_maintenance"],
+    tools=[
+        "get_device_status",
+        "query_vehicle_graph",
+        "list_recent_alarms",
+        "get_device_maintenance",
+    ],
     output_fields=list(DeviceDiagnosis.model_fields),
     failures=[
         DiagnosisFailure(step="status", status="degraded"),
@@ -142,12 +153,70 @@ def diagnose_device(
         if fact.relation == "has_fault" and fact.target_id == _OCCLUSION
     ]
     evidence = [_status_evidence(device), *_graph_evidence(occlusion)]
+    prior: DiagnosisCause | None
     if device.online_status == "offline":
-        cause: DiagnosisCause = "offline"
+        prior = "offline"
     elif occlusion:
-        cause = "camera_occlusion"
+        prior = "camera_occlusion"
+    else:
+        prior = None
+    try:
+        history = harness.call_tool(
+            "list_recent_alarms",
+            {"vehicle_id": vehicle_id, "as_of": _SAMPLE_AS_OF, "within_days": 1},
+            task_id=task_id,
+            node="alarms",
+        )
+    except ToolExecutionError:
+        if prior is None:
+            return _degraded(device_id, evidence=evidence)
+        return _with_maintenance(
+            harness,
+            device_id,
+            task_id,
+            cause=prior,
+            evidence=evidence,
+            alarm_status="degraded",
+        )
+    if not isinstance(history, AlarmHistoryOutput):
+        if prior is None:
+            return _degraded(device_id, evidence=evidence)
+        return _with_maintenance(
+            harness,
+            device_id,
+            task_id,
+            cause=prior,
+            evidence=evidence,
+            alarm_status="degraded",
+        )
+    count = len([item for item in history.alarms if item.device_id == device_id])
+    evidence.append(_alarm_evidence(device_id, count))
+    alarm_status: AlarmCountStatus = "hit" if count >= _FREQUENT_COUNT else "miss"
+    if prior is not None:
+        cause = prior
+    elif count >= _FREQUENT_COUNT:
+        cause = "frequent_alarms"
     else:
         cause = "no_device_fault"
+    return _with_maintenance(
+        harness,
+        device_id,
+        task_id,
+        cause=cause,
+        evidence=evidence,
+        alarm_status=alarm_status,
+    )
+
+
+def _with_maintenance(
+    harness: Harness,
+    device_id: str,
+    task_id: str,
+    *,
+    cause: DiagnosisCause,
+    evidence: list[Evidence],
+    alarm_status: AlarmCountStatus,
+) -> DeviceDiagnosis:
     try:
         maintenance = harness.call_tool(
             "get_device_maintenance",
@@ -161,6 +230,7 @@ def diagnose_device(
             device_id=device_id,
             status="completed",
             cause=cause,
+            alarm_status=alarm_status,
             maintenance_status="degraded",
             evidence=evidence,
         )
@@ -170,6 +240,7 @@ def diagnose_device(
             device_id=device_id,
             status="completed",
             cause=cause,
+            alarm_status=alarm_status,
             maintenance_status="degraded",
             evidence=evidence,
         )
@@ -178,6 +249,7 @@ def diagnose_device(
         device_id=device_id,
         status="completed",
         cause=cause,
+        alarm_status=alarm_status,
         maintenance_status="hit" if maintenance.repair is not None else "miss",
         evidence=[*evidence, *_maintenance_evidence(maintenance)],
     )
@@ -190,6 +262,14 @@ def _degraded(device_id: str, evidence: list[Evidence] | None = None) -> DeviceD
         status="degraded",
         cause=None,
         evidence=evidence or [],
+    )
+
+
+def _alarm_evidence(device_id: str, count: int) -> Evidence:
+    return Evidence(
+        type="history",
+        source="alarm_history",
+        description=f"设备 {device_id} 在 1 日内有 {count} 次报警",
     )
 
 

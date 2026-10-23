@@ -128,6 +128,13 @@ def build_seed_repository(
             vehicle_type="coach",
             device_id="device_004",
         ),
+        "vehicle_005": Vehicle(
+            id="vehicle_005",
+            plate_number="粤B24680",
+            enterprise_id="enterprise_001",
+            vehicle_type="coach",
+            device_id="device_005",
+        ),
     }
     drivers = {
         "driver_001": Driver(
@@ -170,6 +177,11 @@ def build_seed_repository(
             online_status="online",
             last_heartbeat_at=now,
         ),
+        "device_005": Device(
+            id="device_005",
+            online_status="online",
+            last_heartbeat_at=now,
+        ),
     }
     history = [
         Alarm(
@@ -196,12 +208,21 @@ def build_seed_repository(
             speed_kmh=81,
             raw_confidence=0.77,
         ),
+        *_burst("vehicle_004", "device_004", "alarm_004", now),
+        *_burst("vehicle_005", "device_005", "alarm_005", now),
+        _fatigue(
+            "alarm_005_old",
+            "vehicle_005",
+            "device_005",
+            now - timedelta(days=2),
+        ),
     ]
     firmware = {
         "device_001": "1.4.0",
         "device_002": "1.4.0",
         "device_003": "1.2.0",
         "device_004": "1.3.0",
+        "device_005": "1.4.0",
     }
     repairs = [
         RepairRecord(
@@ -231,3 +252,25 @@ def build_seed_repository(
         repairs=repairs,
         failing_maintenance_ids=failing_maintenance_ids,
     )
+
+
+def _fatigue(alarm_id: str, vehicle_id: str, device_id: str, alarm_time: datetime) -> Alarm:
+    return Alarm(
+        id=alarm_id,
+        vehicle_id=vehicle_id,
+        driver_id="driver_001",
+        device_id=device_id,
+        alarm_type="driver_fatigue",
+        alarm_time=alarm_time,
+        longitude=113.26,
+        latitude=23.12,
+        speed_kmh=70,
+        raw_confidence=0.8,
+    )
+
+
+def _burst(vehicle_id: str, device_id: str, prefix: str, now: datetime) -> list[Alarm]:
+    return [
+        _fatigue(f"{prefix}_{index}", vehicle_id, device_id, now - timedelta(minutes=10 * index))
+        for index in (1, 2, 3)
+    ]
