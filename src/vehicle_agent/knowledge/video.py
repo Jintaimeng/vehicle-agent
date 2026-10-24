@@ -190,35 +190,75 @@ def packaged_video_timeline(vision: VisionIndex | None = None) -> FixtureVideoTi
 VideoBackend = Literal["fixture", "ffmpeg"]
 FrameExtractor = Callable[[Path], list[tuple[float, bytes]]]
 FfmpegRunner = Callable[[list[str], Path], str]
+StreamSampler = Callable[[str], list[tuple[float, bytes]]]
 _RTSP_SCHEME = "rtsp://"
+_JT1078_LOCATOR = "jt1078://013800138000/1"
+_JT1078_RTSP = "rtsp://camera/live"
+VideoKind = Literal["file", "rtsp", "jt1078"]
+
+
+class VideoLocator(BaseModel):
+    kind: VideoKind
+    video_id: str
+    rtsp_url: str | None = None
+
+
+def resolve_video_locator(video_id: str) -> VideoLocator:
+    """Map a stored filename, rtsp URL, or the one fixed JT1078 channel."""
+
+    cleaned = video_id.strip()
+    if cleaned.startswith(_RTSP_SCHEME):
+        if cleaned == _RTSP_SCHEME:
+            raise ValueError("rtsp url must start with rtsp://")
+        return VideoLocator(kind="rtsp", video_id=cleaned, rtsp_url=cleaned)
+    if cleaned.startswith("jt1078://"):
+        if cleaned != _JT1078_LOCATOR:
+            raise ValueError("unknown jt1078 channel")
+        return VideoLocator(kind="jt1078", video_id=cleaned, rtsp_url=_JT1078_RTSP)
+    if not cleaned or cleaned != Path(cleaned).name or cleaned in {".", ".."}:
+        raise ValueError("invalid video_id")
+    return VideoLocator(kind="file", video_id=cleaned)
+
+
+def frame_image_id(video_id: str, index: int) -> str:
+    """Turn a locator into a single filename, then append the frame index."""
+
+    replaced = "".join(char if char.isascii() and char.isalnum() else "_" for char in video_id)
+    collapsed = re.sub(r"_+", "_", replaced).strip("_")
+    return f"{collapsed}__{index}"
 
 
 class FfmpegVideoTimeline:
-    """One JPEG per second from a stored video, then the existing frame aggregator."""
+    """Sample a stored file or a resolved stream, then use the existing aggregator."""
 
     def __init__(
         self,
         vision: VisionIndex,
         store: Path,
         extract: FrameExtractor | None = None,
+        sample: StreamSampler | None = None,
     ) -> None:
         self._vision = vision
         self._store = store
         self._extract = ffmpeg_extract_frames if extract is None else extract
+        self._sample = sample_rtsp if sample is None else sample
 
     def analyze(
         self, video_id: str, speed_kmh: float, content: bytes | None = None
     ) -> VideoOutcome:
         del content
-        path = read_stored_video(self._store, video_id)
-        extracted = self._extract(path)
+        locator = resolve_video_locator(video_id)
+        if locator.kind == "file":
+            extracted = self._extract(read_stored_video(self._store, locator.video_id))
+        else:
+            extracted = self._sample(locator.rtsp_url or "")
         if not extracted:
             raise RuntimeError(f"ffmpeg produced no frames: {video_id}")
         frames: list[VideoFrame] = []
         track_frames = getattr(self._vision, "track_frames", None)
         if track_frames is None:
             detected = [
-                self._vision.analyze(f"{video_id}__{index}", jpeg)
+                self._vision.analyze(frame_image_id(locator.video_id, index), jpeg)
                 for index, (_timestamp, jpeg) in enumerate(extracted)
             ]
         else:
@@ -229,7 +269,7 @@ class FfmpegVideoTimeline:
         for index, ((timestamp, jpeg), detections) in enumerate(
             zip(extracted, detected, strict=True)
         ):
-            image_id = f"{video_id}__{index}"
+            image_id = frame_image_id(locator.video_id, index)
             store_image(self._store, image_id, jpeg)
             frames.append(
                 VideoFrame(
