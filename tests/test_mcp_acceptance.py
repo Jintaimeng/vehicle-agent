@@ -50,6 +50,7 @@ def test_stdio_high_risk_judgement_uses_mcp(tmp_path) -> None:
         documents = [item for item in evidence if item["type"] == "document"]
         assert body["status"] == "completed"
         assert body["result"]["risk_score"] == 1.0
+        assert body["workorder_id"] == f"wo-{body['task_id']}"
         assert documents[0]["source"] == "fatigue-rules"
         assert "第2节" in documents[0]["description"]
         assert any(item["type"] == "graph" for item in evidence)
@@ -58,6 +59,7 @@ def test_stdio_high_risk_judgement_uses_mcp(tmp_path) -> None:
             "list_recent_alarms",
             "search_regulations",
             "query_vehicle_graph",
+            "create_workorder",
         ]
     finally:
         app.state.mcp_session.close()
