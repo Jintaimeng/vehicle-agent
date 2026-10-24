@@ -1,5 +1,6 @@
 import re
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Literal, Protocol
 
@@ -45,11 +46,16 @@ class MarkdownRegulationIndex:
             documents.extend(parse_regulation_document(path.read_text(encoding="utf-8")))
         return cls(documents)
 
-    def search(self, alarm_type: str, query: str | None = None) -> list[RegulationSnippet]:
+    def search(
+        self,
+        alarm_type: str,
+        query: str | None = None,
+        embedder: Callable[[str], list[float]] | None = None,
+    ) -> list[RegulationSnippet]:
         matched = [
             snippet for alarm_types, snippet in self._documents if alarm_type in alarm_types
         ]
-        return _rank_snippets(matched, _regulation_query(alarm_type, query))
+        return _rank_snippets(matched, _regulation_query(alarm_type, query), embedder)
 
 
 def packaged_regulation_index() -> MarkdownRegulationIndex:
@@ -186,10 +192,14 @@ def _regulation_query(alarm_type: str, query: str | None) -> str:
     return REGULATION_QUERIES.get(alarm_type, alarm_type)
 
 
-def _rank_snippets(snippets: list[RegulationSnippet], query: str) -> list[RegulationSnippet]:
+def _rank_snippets(
+    snippets: list[RegulationSnippet],
+    query: str,
+    embedder: Callable[[str], list[float]] | None = None,
+) -> list[RegulationSnippet]:
     from vehicle_agent.knowledge.hybrid import hybrid_rank
 
-    return hybrid_rank(snippets, query)
+    return hybrid_rank(snippets, query, embedder)
 
 
 def _collection_vector_size(client) -> int | None:

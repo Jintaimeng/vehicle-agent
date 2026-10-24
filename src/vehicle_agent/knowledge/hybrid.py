@@ -1,5 +1,6 @@
 import hashlib
 import math
+from collections.abc import Callable
 
 from vehicle_agent.knowledge.index import RegulationSnippet
 
@@ -8,6 +9,8 @@ RRF_K = 60
 RERANK_LIMIT = 5
 VECTOR_WEIGHT = 0.5
 KEYWORD_WEIGHT = 0.5
+Embedder = Callable[[str], list[float]]
+_NEURAL_LAYER: tuple[list[list[float]], list[float]] | None = None
 
 
 def regulation_text(snippet: RegulationSnippet) -> str:
@@ -28,10 +31,21 @@ def regulation_vector(text: str) -> list[float]:
         bucket = int.from_bytes(digest[:2], "big") % VECTOR_SIZE
         sign = 1.0 if digest[2] % 2 == 0 else -1.0
         vector[bucket] += sign
-    norm = math.sqrt(sum(value * value for value in vector))
-    if norm == 0:
-        return vector
-    return [value / norm for value in vector]
+    return _normalize(vector)
+
+
+def neural_embed(text: str) -> list[float]:
+    """One fixed linear layer and tanh over the character-hash vector."""
+
+    hashed = regulation_vector(text)
+    weights, bias = _neural_layer()
+    activated = []
+    for row, bias_value in zip(weights, bias, strict=True):
+        total = bias_value + sum(
+            weight * value for weight, value in zip(row, hashed, strict=True)
+        )
+        activated.append(math.tanh(total))
+    return _normalize(activated)
 
 
 def keyword_overlap(query: str, text: str) -> float:
@@ -46,13 +60,23 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     return sum(one * other for one, other in zip(left, right, strict=True))
 
 
-def hybrid_rank(snippets: list[RegulationSnippet], query: str) -> list[RegulationSnippet]:
+def hybrid_rank(
+    snippets: list[RegulationSnippet],
+    query: str,
+    embedder: Embedder | None = None,
+) -> list[RegulationSnippet]:
     if not snippets:
         return []
     texts = {_snippet_key(snippet): regulation_text(snippet) for snippet in snippets}
-    query_vector = regulation_vector(query)
+    embed = regulation_vector if embedder is None else embedder
+    query_vector = embed(query)
+    _require_vector(query_vector)
+    document_vectors = {key: embed(text) for key, text in texts.items()}
+    for vector in document_vectors.values():
+        if len(vector) != len(query_vector):
+            raise ValueError("embedder vectors must share one length")
     vector_scores = {
-        key: cosine_similarity(query_vector, regulation_vector(text)) for key, text in texts.items()
+        key: cosine_similarity(query_vector, vector) for key, vector in document_vectors.items()
     }
     keyword_scores = {key: keyword_overlap(query, text) for key, text in texts.items()}
     return fuse_scores(snippets, vector_scores=vector_scores, keyword_scores=keyword_scores)
@@ -88,3 +112,32 @@ def fuse_scores(
 
 def _snippet_key(snippet: RegulationSnippet) -> tuple[str, str]:
     return (snippet.document_id, snippet.section)
+
+
+def _normalize(vector: list[float]) -> list[float]:
+    norm = math.sqrt(sum(value * value for value in vector))
+    if norm == 0:
+        return vector
+    return [value / norm for value in vector]
+
+
+def _require_vector(vector: list[float]) -> None:
+    if len(vector) < 1:
+        raise ValueError("embedder vector must contain at least one value")
+
+
+def _neural_layer() -> tuple[list[list[float]], list[float]]:
+    global _NEURAL_LAYER
+    if _NEURAL_LAYER is None:
+        weights = [
+            [_layer_value(f"w:{row}:{column}") for column in range(VECTOR_SIZE)]
+            for row in range(VECTOR_SIZE)
+        ]
+        bias = [_layer_value(f"b:{row}") for row in range(VECTOR_SIZE)]
+        _NEURAL_LAYER = (weights, bias)
+    return _NEURAL_LAYER
+
+
+def _layer_value(label: str) -> float:
+    digest = hashlib.sha256(label.encode("utf-8")).digest()
+    return digest[0] / 127.5 - 1

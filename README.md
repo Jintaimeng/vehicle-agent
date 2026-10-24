@@ -19,7 +19,7 @@ FastAPI
 
 本阶段包含一条疲劳驾驶报警研判闭环、法规摘录检索、图谱关系和人工复核、检查点恢复。法规命中时证据带来源；图谱命中时另附车辆、驾驶员和设备关系。未命中、检索失败，或法规与摄像头遮挡故障冲突时，降低置信度并进入人工复核，研判不因此失败。
 
-法规检索走 `RegulationIndex`。默认实现读取仓库内 Markdown。把 `VEHICLE_AGENT_REGULATION_BACKEND` 设为 `qdrant` 后，同一工具改为读取 Qdrant 中的相同摘录。排序是字符二元组哈希向量、词项重叠、RRF 和固定加权重排，查询短语由报警类型查表得到。模型只使用已经校验过的 `alarm_type`。
+法规检索走 `RegulationIndex`。默认实现读取仓库内 Markdown。把 `VEHICLE_AGENT_REGULATION_BACKEND` 设为 `qdrant` 后，同一工具改为读取 Qdrant 中的相同摘录。排序是字符二元组哈希向量、词项重叠、RRF 和固定加权重排，查询短语由报警类型查表得到。模型只使用已经校验过的 `alarm_type`。`neural_embed` 在该哈希上加一层固定线性变换和 `tanh`，维度仍是 128。研判和 Qdrant 不使用它。
 
 图谱查询走 `GraphIndex`。默认实现是内存中的固定关系，不依赖数据库。把 `VEHICLE_AGENT_GRAPH_BACKEND` 设为 `neo4j` 后，同一工具改为读取 Neo4j 中的相同事实。查询语句是固定 Cypher，模型只使用已经校验过的 `vehicle_id` 和 `device_id`。
 
@@ -53,7 +53,7 @@ FastAPI
 
 `vehicle.alarm` 在内存中接收第 12.2 节那条疲劳报警，同一个 `event_id` 只留下一条，且不写入定样本仓储。研判图不消费它。
 
-本阶段不包含驾驶员汇总、企业汇总、路线偏离、神经网络 Embedding、Kafka 经纪人及其余主题和前端。
+本阶段不包含驾驶员汇总、企业汇总、路线偏离、Kafka 经纪人及其余主题和前端。
 
 ## 环境
 

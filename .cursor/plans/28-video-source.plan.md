@@ -13,7 +13,7 @@ isProject: false
 
 # 28 统一视频入口
 
-上一阶段是已完成的报警事件，见 [.cursor/plans/27-vehicle-alarm-event.plan.md](.cursor/plans/27-vehicle-alarm-event.plan.md)。本文件是阶段 28，落地到 [.cursor/plans/28-video-source.plan.md](.cursor/plans/28-video-source.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 3.2 节的统一视频适配接口和简化 JT1078 适配器。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、手机使用研判、神经网络 Embedding、Kafka 经纪人及其余主题和前端仍不纳入。
+上一阶段是已完成的报警事件，见 [.cursor/plans/27-vehicle-alarm-event.plan.md](.cursor/plans/27-vehicle-alarm-event.plan.md)。本文件是阶段 28，落地到 [.cursor/plans/28-video-source.plan.md](.cursor/plans/28-video-source.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/29-neural-embedding.plan.md](.cursor/plans/29-neural-embedding.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 3.2 节的统一视频适配接口和简化 JT1078 适配器。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、手机使用研判、神经网络 Embedding、Kafka 经纪人及其余主题和前端仍不纳入。
 
 本阶段只证明一件事：`video_id` 可以是已保存的文件名、`rtsp://` 地址，或唯一一条 `jt1078://013800138000/1`。后两种都交给现有的 [sample_rtsp](src/vehicle_agent/knowledge/video.py)，再走现有连续帧聚合。研判图的节点不改，仍然调用 `analyze_video`。默认 `video_backend=fixture` 仍只读定样本目录，不调用 FFmpeg，也不打开套接字。模型不参与。`risk_score` 的计算公式、复核条件和 `prompt_version`（`report-v6`）不变。不新增工具，不新增 HTTP 接口。工具数仍是十一个。不解析 JT1078 的 RTP 或 PS，不监听端口。
 
