@@ -96,6 +96,25 @@ class MemoryAlarmRepository:
             matched.append(alarm)
         return sorted(matched, key=lambda item: item.alarm_time)
 
+    def list_alarms_between(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        include_end: bool,
+    ) -> list[Alarm]:
+        matched = []
+        for alarm in self._alarms:
+            if alarm.alarm_time < start:
+                continue
+            if include_end:
+                if alarm.alarm_time > end:
+                    continue
+            elif alarm.alarm_time >= end:
+                continue
+            matched.append(alarm)
+        return sorted(matched, key=lambda item: item.alarm_time)
+
     def _raise_if_unavailable(self, vehicle_id: str) -> None:
         if vehicle_id in self._failing_vehicle_ids:
             raise ConnectionError(f"vehicle store unavailable for {vehicle_id}")

@@ -16,7 +16,7 @@ isProject: false
 
 # 22 报警根因分析
 
-上一阶段是已完成的车辆风险画像，见 [.cursor/plans/21-vehicle-risk-profile.plan.md](.cursor/plans/21-vehicle-risk-profile.plan.md)。本文件是阶段 22，落地到 [.cursor/plans/22-alarm-root-cause.plan.md](.cursor/plans/22-alarm-root-cause.plan.md)。下一阶段再写 `.cursor/plans/23-operation-report.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.2 节的 `alarm-root-cause-analysis`。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、运营报告、Kafka 和前端仍不纳入。本阶段不把报警、规则或案例写成新的图谱关系，也不改 [src/vehicle_agent/knowledge/graph.py](src/vehicle_agent/knowledge/graph.py) 的 `query`。`query_vehicle_graph` 多返回事实会改变疲劳研判证据。
+上一阶段是已完成的车辆风险画像，见 [.cursor/plans/21-vehicle-risk-profile.plan.md](.cursor/plans/21-vehicle-risk-profile.plan.md)。本文件是阶段 22，落地到 [.cursor/plans/22-alarm-root-cause.plan.md](.cursor/plans/22-alarm-root-cause.plan.md)。下一阶段是 [.cursor/plans/23-operation-report.plan.md](.cursor/plans/23-operation-report.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.2 节的 `alarm-root-cause-analysis`。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、运营报告、Kafka 和前端仍不纳入。本阶段不把报警、规则或案例写成新的图谱关系，也不改 [src/vehicle_agent/knowledge/graph.py](src/vehicle_agent/knowledge/graph.py) 的 `query`。`query_vehicle_graph` 多返回事实会改变疲劳研判证据。
 
 本阶段只证明一件事：给定报警标识，代码可以沿该报警的车辆和设备读出图谱故障，再读一条法规摘录和 7 日内其余同类报警，写出一个根因和一句建议。历史案例就是这 7 日内同一辆车、同一报警类型、标识不同的报警，不另建案例库。报警类型仍只有 `driver_fatigue`。模型不选择步骤，也不改根因或建议。不调用 `diagnose_device` 或 `profile_vehicle`。疲劳驾驶研判图不调用这份 Skill。`risk_score`、复核条件、是否建单和 `prompt_version`（`report-v6`）不变。`alarm-verification` 仍是六个只读工具。工具数仍是十一个。
 

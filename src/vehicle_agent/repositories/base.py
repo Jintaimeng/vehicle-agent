@@ -26,3 +26,11 @@ class AlarmRepository(Protocol):
         since: datetime,
         alarm_type: str | None = None,
     ) -> list[Alarm]: ...
+
+    def list_alarms_between(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        include_end: bool,
+    ) -> list[Alarm]: ...

@@ -14,6 +14,11 @@ from vehicle_agent.skills.device_diagnosis import (
     check_device_diagnosis_skill,
     diagnose_device,
 )
+from vehicle_agent.skills.operation_report import (
+    OPERATION_REPORT,
+    build_operation_report,
+    check_operation_report_skill,
+)
 from vehicle_agent.skills.vehicle_risk_profile import (
     VEHICLE_RISK_PROFILE,
     check_vehicle_risk_profile_skill,
@@ -24,10 +29,13 @@ __all__ = [
     "ALARM_ROOT_CAUSE",
     "ALARM_VERIFICATION",
     "DEVICE_DIAGNOSIS",
+    "OPERATION_REPORT",
     "VEHICLE_RISK_PROFILE",
+    "build_operation_report",
     "check_alarm_root_cause_skill",
     "check_alarm_verification_skill",
     "check_device_diagnosis_skill",
+    "check_operation_report_skill",
     "check_vehicle_risk_profile_skill",
     "diagnose_device",
     "profile_vehicle",

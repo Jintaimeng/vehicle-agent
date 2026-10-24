@@ -68,5 +68,18 @@ class MemoryWorkOrderStore:
         self._items[workorder_id] = updated
         return updated
 
+    def list_workorders(self) -> list[WorkOrder]:
+        return list(self._items.values())
+
     def __len__(self) -> int:
         return len(self._items)
+
+
+def seed_report_workorders() -> MemoryWorkOrderStore:
+    """Fixed orders for the operation report. Judgement keeps its own empty store."""
+
+    store = MemoryWorkOrderStore()
+    store.create("report-closed", "alarm_011_1", "high", "定样本已关闭")
+    store.update("wo-report-closed", "closed", "")
+    store.create("report-open", "alarm_hist_001", "high", "定样本未关闭")
+    return store

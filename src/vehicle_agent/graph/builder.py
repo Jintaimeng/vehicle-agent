@@ -8,6 +8,7 @@ from vehicle_agent.knowledge.vision import ObservationSource, open_observation
 from vehicle_agent.skills.alarm_root_cause import check_alarm_root_cause_skill
 from vehicle_agent.skills.alarm_verification import check_alarm_verification_skill
 from vehicle_agent.skills.device_diagnosis import check_device_diagnosis_skill
+from vehicle_agent.skills.operation_report import check_operation_report_skill
 from vehicle_agent.skills.vehicle_risk_profile import check_vehicle_risk_profile_skill
 
 _NODE_ORDER = [
@@ -32,6 +33,7 @@ def build_graph(
     check_device_diagnosis_skill(harness.tools)
     check_vehicle_risk_profile_skill(harness.tools)
     check_alarm_root_cause_skill(harness.tools)
+    check_operation_report_skill(harness.tools)
     observer = observation if observation is not None else open_observation(harness)
     nodes = make_nodes(harness, observer)
     graph = StateGraph(JudgementState)
