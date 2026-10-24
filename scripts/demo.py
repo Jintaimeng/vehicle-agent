@@ -9,16 +9,8 @@ from fastapi.testclient import TestClient
 from vehicle_agent.api.main import create_app
 from vehicle_agent.config import Settings
 from vehicle_agent.graph.checkpoint import open_checkpointer
-from vehicle_agent.harness.model import FakeModelAdapter
+from vehicle_agent.harness.model import FIXTURE_REPORT, FakeModelAdapter
 from vehicle_agent.repositories.memory import build_seed_repository
-
-REPORT = json.dumps(
-    {
-        "summary": "驾驶员在高速行驶期间再次出现疲劳驾驶报警，建议立即联系并安排停车休息。",
-        "recommendations": ["联系驾驶员并要求就近停车休息", "通知企业安全管理员复核"],
-    },
-    ensure_ascii=False,
-)
 
 
 def main() -> None:
@@ -27,7 +19,7 @@ def main() -> None:
     app = create_app(
         settings,
         build_seed_repository(),
-        FakeModelAdapter(REPORT),
+        FakeModelAdapter(FIXTURE_REPORT),
         open_checkpointer(settings.checkpoint_path),
     )
     alarm = {

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
-from vehicle_agent.api.main import create_app
+from vehicle_agent.api.main import create_app, open_model
 from vehicle_agent.config import Settings
 from vehicle_agent.graph.checkpoint import open_checkpointer
 from vehicle_agent.harness.model import FakeModelAdapter
@@ -196,3 +196,59 @@ def test_missing_task_uses_error_body(tmp_path) -> None:
 
     assert response.status_code == 404
     assert response.json() == {"code": "not_found", "message": "task not found"}
+
+
+def test_health_does_not_call_the_model(tmp_path) -> None:
+    client = _client(tmp_path)
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_fixture_backend_scores_demo_alarm(tmp_path) -> None:
+    settings = Settings(
+        model_backend="fixture",
+        checkpoint_path=str(tmp_path / "checkpoints.sqlite"),
+        max_retries=1,
+    )
+    client = TestClient(
+        create_app(
+            settings,
+            build_seed_repository(),
+            open_model(settings),
+            open_checkpointer(settings.checkpoint_path),
+        )
+    )
+
+    response = client.post(
+        "/api/v1/judgements",
+        json=_alarm(
+            id="alarm_demo",
+            vehicle_id="vehicle_001",
+            driver_id="driver_001",
+            device_id="device_001",
+            longitude=113.2644,
+            latitude=23.1291,
+            speed_kmh=85,
+            raw_confidence=0.9,
+        ),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["result"]["risk_score"] == 1.0
+    assert body["result"]["risk_level"] == "high"
+    assert body["result"]["requires_human_review"] is False
+    assert body["workorder_id"] == f"wo-{body['task_id']}"
+    assert body["result"]["summary"].startswith("驾驶员在高速行驶期间")
+
+
+def test_local_process_defaults_stay_on_openai() -> None:
+    settings = Settings()
+
+    assert settings.model_backend == "openai"
+    assert settings.host == "127.0.0.1"
+    assert settings.port == 8000

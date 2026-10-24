@@ -12,7 +12,12 @@ from vehicle_agent.config import Settings
 from vehicle_agent.domain.models import Alarm, Detection, HumanReview, JudgementResult
 from vehicle_agent.graph.builder import build_graph
 from vehicle_agent.graph.checkpoint import open_checkpointer
-from vehicle_agent.harness.model import ModelAdapter, OpenAICompatibleModel
+from vehicle_agent.harness.model import (
+    FIXTURE_REPORT,
+    FakeModelAdapter,
+    ModelAdapter,
+    OpenAICompatibleModel,
+)
 from vehicle_agent.harness.policy import AllowApprovedWritesPolicy
 from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
@@ -99,6 +104,10 @@ def create_app(
     app.state.regulation_index = regulations
     app.state.tools = tools
     app.state.mcp_session = mcp_session
+
+    @app.get("/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
 
     @app.exception_handler(HTTPException)
     async def http_error(_request, exc: HTTPException) -> JSONResponse:
@@ -217,11 +226,19 @@ def build_default_app() -> FastAPI:
     return create_app(
         settings,
         build_seed_repository(),
-        OpenAICompatibleModel(settings),
+        open_model(settings),
         open_checkpointer(settings.checkpoint_path),
         graph_index=index,
         regulation_index=regulations,
     )
+
+
+def open_model(settings: Settings) -> ModelAdapter:
+    """Use the fixed demo summary offline, or the OpenAI-compatible endpoint."""
+
+    if settings.model_backend == "fixture":
+        return FakeModelAdapter(FIXTURE_REPORT)
+    return OpenAICompatibleModel(settings)
 
 
 def _graph_index(settings: Settings):
@@ -246,7 +263,8 @@ def _close_index(index) -> None:
 def main() -> None:
     import uvicorn
 
-    uvicorn.run(build_default_app(), host="127.0.0.1", port=8000)
+    settings = Settings()
+    uvicorn.run(build_default_app(), host=settings.host, port=settings.port)
 
 
 def _config(task_id: str) -> dict:

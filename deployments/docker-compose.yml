@@ -1,6 +1,7 @@
 # 仅限本地开发。Neo4j 口令写在本文件中，只给本机使用，不要用于共享环境或生产环境。
 # 不另建 .env，避免把口令放到会被误提交的环境文件里。
-# 验收时按服务名启动，例如 `docker compose up -d neo4j` 或 `docker compose up -d qdrant`。
+# 验收时按服务名启动，例如 `docker compose up -d neo4j`、`docker compose up -d qdrant`、
+# `docker compose up -d kafka` 或 `docker compose up -d api`。api 不依赖另外三个服务。
 
 services:
   neo4j:
@@ -35,3 +36,31 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+  api:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      VEHICLE_AGENT_MODEL_BACKEND: fixture
+      VEHICLE_AGENT_HOST: 0.0.0.0
+      VEHICLE_AGENT_CHECKPOINT_PATH: /data/checkpoints.sqlite
+    volumes:
+      - api-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  api-data:

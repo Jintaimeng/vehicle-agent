@@ -13,7 +13,7 @@ isProject: false
 
 # 33 报警事件研判
 
-上一阶段是已完成的 Kafka 设备状态，见 [.cursor/plans/32-kafka-device-status.plan.md](.cursor/plans/32-kafka-device-status.plan.md)。本文件是阶段 33，落地到 [.cursor/plans/33-alarm-event-judgement.plan.md](.cursor/plans/33-alarm-event-judgement.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 12.2 节的报警事件和第 10.2 节里「根据规则触发 Agent 任务」。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、手机使用研判、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created` 和前端仍不纳入。
+上一阶段是已完成的 Kafka 设备状态，见 [.cursor/plans/32-kafka-device-status.plan.md](.cursor/plans/32-kafka-device-status.plan.md)。本文件是阶段 33，落地到 [.cursor/plans/33-alarm-event-judgement.plan.md](.cursor/plans/33-alarm-event-judgement.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/34-lite-compose.plan.md](.cursor/plans/34-lite-compose.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 12.2 节的报警事件和第 10.2 节里「根据规则触发 Agent 任务」。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、手机使用研判、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created` 和前端仍不纳入。
 
 本阶段只证明一件事：`fatigue_alarm_event()` 编成的 JSON 可以解析后进入现有疲劳研判图，并得到与直接提交同一条 [Alarm](src/vehicle_agent/domain/models.py) 相同的风险分。图仍是 `validate → context → history → retrieve → graph → vision → score → report/review`。模型只写总结，不改分数。不新增 HTTP 接口，不新增工具。工具数仍是十一个。默认测试不连接 Kafka。`device.status` 不触发研判，也不触发设备诊断。
 

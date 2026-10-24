@@ -9,9 +9,12 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="VEHICLE_AGENT_", extra="ignore")
 
+    model_backend: Literal["openai", "fixture"] = "openai"
     model_base_url: str = "http://127.0.0.1:8001/v1"
     model_api_key: str = "local"
     model_name: str = "qwen"
+    host: str = "127.0.0.1"
+    port: int = 8000
     prompt_version: str = "report-v6"
     request_timeout_seconds: float = 30
     max_retries: int = 2

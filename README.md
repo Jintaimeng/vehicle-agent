@@ -55,7 +55,9 @@ FastAPI
 
 `device.status` 可以编成这条心跳的 JSON 再交给现有收件箱；同一个 `event_id` 只留一条。默认测试用假发送器。实机与 `vehicle.alarm` 共用 `VEHICLE_AGENT_RUN_KAFKA=1` 和 `127.0.0.1:9092`。研判图和设备诊断都不消费它。
 
-本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created` 和前端。
+lite 容器用 `docker compose -f deployments/docker-compose.yml up -d api` 启动。它使用定样本和固定模型输出，不启动 Neo4j、Qdrant、Kafka，也不调用在线模型。演示脚本那条车速 85、置信度 0.9 的报警风险分是 `1.0`。
+
+本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes 和前端。
 
 ## 环境
 
@@ -77,7 +79,7 @@ D:\uv_venv\Scripts\python.exe scripts\demo.py
 
 ## 启动 API
 
-默认模型适配器读取以下环境变量，并调用 OpenAI-compatible `chat/completions`：
+本机进程默认 `VEHICLE_AGENT_MODEL_BACKEND=openai`，监听 `127.0.0.1:8000`，并调用 OpenAI-compatible `chat/completions`：
 
 - `VEHICLE_AGENT_MODEL_BASE_URL`，默认 `http://127.0.0.1:8001/v1`
 - `VEHICLE_AGENT_MODEL_API_KEY`，默认 `local`
@@ -85,6 +87,19 @@ D:\uv_venv\Scripts\python.exe scripts\demo.py
 
 ```powershell
 D:\uv_venv\Scripts\python.exe -m vehicle_agent.api.main
+```
+
+不需要在线模型时，用 lite 容器。它把 `VEHICLE_AGENT_MODEL_BACKEND` 设为 `fixture`，监听 `0.0.0.0:8000`，检查点写到卷里的 `/data/checkpoints.sqlite`。`GET /health` 只返回进程可用，不调用模型。
+
+```powershell
+docker compose -f deployments/docker-compose.yml up -d api
+```
+
+容器验收：
+
+```powershell
+$env:VEHICLE_AGENT_RUN_COMPOSE="1"
+D:\uv_venv\Scripts\python.exe -m pytest tests/test_compose_acceptance.py
 ```
 
 创建研判：

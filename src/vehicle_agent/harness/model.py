@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 from typing import Any, Protocol
 
@@ -79,6 +80,15 @@ class OpenAICompatibleModel:
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise ModelCallError("model response is missing completion content") from exc
         return ModelResponse(content=content, total_tokens=tokens, model=model)
+
+
+FIXTURE_REPORT = json.dumps(
+    {
+        "summary": "驾驶员在高速行驶期间再次出现疲劳驾驶报警，建议立即联系并安排停车休息。",
+        "recommendations": ["联系驾驶员并要求就近停车休息", "通知企业安全管理员复核"],
+    },
+    ensure_ascii=False,
+)
 
 
 class FakeModelAdapter:
