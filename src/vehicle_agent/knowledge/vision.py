@@ -213,6 +213,50 @@ def compare_observation(
     return agreement, facts
 
 
+_OVERLAY_SIDE = 100
+
+
+def render_detection_overlay(
+    detections: list[Detection],
+    *,
+    width: int = _OVERLAY_SIDE,
+    height: int = _OVERLAY_SIDE,
+) -> bytes:
+    """Draw detection borders on a fixed black canvas. Source pixels are not read."""
+
+    if width < 1 or height < 1:
+        raise ValueError("overlay side must be at least 1")
+    pixels = bytearray(width * height * 3)
+    for item in detections:
+        _draw_overlay_border(pixels, width, height, item.bbox)
+    header = f"P6\n{width} {height}\n255\n".encode("ascii")
+    return header + bytes(pixels)
+
+
+def _draw_overlay_border(
+    pixels: bytearray,
+    width: int,
+    height: int,
+    bbox: tuple[float, float, float, float],
+) -> None:
+    x1, y1, x2, y2 = bbox
+    left = int(x1 * width + 1e-6)
+    top = int(y1 * height + 1e-6)
+    right = int(x2 * width + 1e-6)
+    bottom = int(y2 * height + 1e-6)
+    left = max(0, min(width, left))
+    top = max(0, min(height, top))
+    right = max(0, min(width, right))
+    bottom = max(0, min(height, bottom))
+    if right <= left or bottom <= top:
+        return
+    for y in range(top, bottom):
+        for x in range(left, right):
+            if x == left or x == right - 1 or y == top or y == bottom - 1:
+                offset = (y * width + x) * 3
+                pixels[offset : offset + 3] = b"\xff\xff\xff"
+
+
 def store_image(directory: Path, image_id: str, content: bytes) -> None:
     path = image_file(directory, image_id)
     path.parent.mkdir(parents=True, exist_ok=True)

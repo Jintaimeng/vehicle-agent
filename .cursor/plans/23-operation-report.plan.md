@@ -16,7 +16,7 @@ isProject: false
 
 # 23 运营报告
 
-上一阶段是已完成的报警根因分析，见 [.cursor/plans/22-alarm-root-cause.plan.md](.cursor/plans/22-alarm-root-cause.plan.md)。本文件是阶段 23，落地到 [.cursor/plans/23-operation-report.plan.md](.cursor/plans/23-operation-report.plan.md)。下一阶段再写 `.cursor/plans/24-detection-visualization.plan.md`，本阶段不创建该文件。目标跟踪和 RTSP 排在检测可视化之后，本阶段也不创建那两个计划。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.2 节的 `operation-report`。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、检测可视化、目标跟踪、RTSP、Kafka 和前端仍不纳入。
+上一阶段是已完成的报警根因分析，见 [.cursor/plans/22-alarm-root-cause.plan.md](.cursor/plans/22-alarm-root-cause.plan.md)。本文件是阶段 23，落地到 [.cursor/plans/23-operation-report.plan.md](.cursor/plans/23-operation-report.plan.md)。下一阶段是 [.cursor/plans/24-detection-visualization.plan.md](.cursor/plans/24-detection-visualization.plan.md)。目标跟踪和 RTSP 排在检测可视化之后，本阶段也不创建那两个计划。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 14.2 节的 `operation-report`。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、检测可视化、目标跟踪、RTSP、Kafka 和前端仍不纳入。
 
 本阶段只证明一件事：给定 `day` 或 `week`，代码可以数出固定时间窗里的全部疲劳报警，和上一同等窗口比较出一个趋势，再按这些报警关联的工单写出一个处置效果和一句建议。`as_of` 固定为 `2026-10-09T10:30:00Z`。日窗口是 1 日，周窗口是 7 日。上一窗口紧挨在本窗口之前，长度相同。模型不选择步骤，也不改趋势、处置效果或建议。不调用研判图，不调用 `diagnose_device`、`profile_vehicle` 或 `trace_alarm_cause`。`risk_score`、复核条件、是否建单和 `prompt_version`（`report-v6`）不变。不新增工具，也不调用 `create_workorder` 或 `update_workorder`。工具数仍是十一个。`alarm-verification` 仍是六个只读工具。
 
