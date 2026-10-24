@@ -53,7 +53,9 @@ FastAPI
 
 `vehicle.alarm` 在内存中接收第 12.2 节那条疲劳报警，同一个 `event_id` 只留下一条，且不写入定样本仓储。研判图不消费它。
 
-本阶段不包含驾驶员汇总、企业汇总、路线偏离、Kafka 经纪人及其余主题和前端。
+`device.status` 在内存中接收这条 `device_001` 心跳，同一个 `event_id` 只留下一条，且不写入定样本仓储。研判图和设备诊断都不消费它。
+
+本阶段不包含驾驶员汇总、企业汇总、路线偏离、Kafka 经纪人、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created` 和前端。
 
 ## 环境
 

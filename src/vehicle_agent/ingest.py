@@ -3,9 +3,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from vehicle_agent.domain.models import Alarm
+from vehicle_agent.domain.models import Alarm, Device
 
 _TOPIC = "vehicle.alarm"
+_STATUS_TOPIC = "device.status"
 
 
 class AlarmEvent(BaseModel):
@@ -84,3 +85,58 @@ class MemoryAlarmTopic:
 
     def alarms(self) -> list[Alarm]:
         return list(self._alarms.values())
+
+
+class DeviceStatusEvent(BaseModel):
+    """One device.status payload. It does not update the seeded device table."""
+
+    event_id: str
+    device_id: str
+    online_status: Literal["online", "offline"]
+    last_heartbeat_at: datetime
+    schema_version: Literal["1.0"]
+
+    @field_validator("event_id")
+    @classmethod
+    def event_id_is_present(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("event_id must not be blank")
+        return cleaned
+
+
+def device_status_event() -> DeviceStatusEvent:
+    """A fixed device_001 heartbeat, kept out of the seeded repository."""
+
+    return DeviceStatusEvent(
+        event_id="evt_20261009_000002",
+        device_id="device_001",
+        online_status="online",
+        last_heartbeat_at=datetime(2026, 10, 9, 10, 30, tzinfo=UTC),
+        schema_version="1.0",
+    )
+
+
+class MemoryDeviceStatusTopic:
+    """In-memory device.status log. One event_id becomes one device."""
+
+    def __init__(self) -> None:
+        self.name = _STATUS_TOPIC
+        self._log: list[DeviceStatusEvent] = []
+        self._devices: dict[str, Device] = {}
+
+    def deliver(self, event: DeviceStatusEvent) -> Device:
+        self._log.append(event)
+        existing = self._devices.get(event.event_id)
+        if existing is not None:
+            return existing
+        device = Device(
+            id=event.device_id,
+            online_status=event.online_status,
+            last_heartbeat_at=event.last_heartbeat_at,
+        )
+        self._devices[event.event_id] = device
+        return device
+
+    def devices(self) -> list[Device]:
+        return list(self._devices.values())

@@ -13,7 +13,7 @@ isProject: false
 
 # 29 神经网络向量
 
-上一阶段是已完成的统一视频入口，见 [.cursor/plans/28-video-source.plan.md](.cursor/plans/28-video-source.plan.md)。本文件是阶段 29，落地到 [.cursor/plans/29-neural-embedding.plan.md](.cursor/plans/29-neural-embedding.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 15.3 节的向量检索。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、手机使用研判、Kafka 经纪人及其余主题和前端仍不纳入。
+上一阶段是已完成的统一视频入口，见 [.cursor/plans/28-video-source.plan.md](.cursor/plans/28-video-source.plan.md)。本文件是阶段 29，落地到 [.cursor/plans/29-neural-embedding.plan.md](.cursor/plans/29-neural-embedding.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/30-device-status-event.plan.md](.cursor/plans/30-device-status-event.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 15.3 节的向量检索。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、手机使用研判、Kafka 经纪人及其余主题和前端仍不纳入。
 
 本阶段只证明一件事：同一段文本可以先变成现在的 128 维字符哈希，再经过一层固定权重的线性变换和 `tanh`，得到另一个 128 维单位向量。默认的 [hybrid_rank](src/vehicle_agent/knowledge/hybrid.py) 仍调用 [regulation_vector](src/vehicle_agent/knowledge/hybrid.py)。只有调用方传入向量函数时，查询和摘录的向量才来自这个函数；关键词重叠、RRF 和加权重排不变。研判图不传入向量函数。Qdrant 仍写入并查询字符哈希，避免两种向量放进同一个集合。不下载模型，不增加依赖。`risk_score`、复核条件和 `prompt_version`（`report-v6`）不变。不新增工具。工具数仍是十一个。
 
