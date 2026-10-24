@@ -1,7 +1,9 @@
+import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from vehicle_agent.domain.models import Alarm, Device
 
@@ -53,6 +55,69 @@ def fatigue_alarm_event() -> AlarmEvent:
         source_confidence=0.71,
         schema_version="1.0",
     )
+
+
+def alarm_event_payload(event: AlarmEvent) -> bytes:
+    """Section 12.2 JSON. Coordinates sit under location, and time ends in Z."""
+
+    body = {
+        "event_id": event.event_id,
+        "alarm_id": event.alarm_id,
+        "alarm_type": event.alarm_type,
+        "vehicle_id": event.vehicle_id,
+        "driver_id": event.driver_id,
+        "device_id": event.device_id,
+        "occurred_at": event.occurred_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "location": {"longitude": event.longitude, "latitude": event.latitude},
+        "speed_kmh": event.speed_kmh,
+        "media_ids": list(event.media_ids),
+        "source_confidence": event.source_confidence,
+        "schema_version": event.schema_version,
+    }
+    return json.dumps(body, ensure_ascii=False).encode("utf-8")
+
+
+def alarm_event_from_payload(payload: bytes) -> AlarmEvent:
+    """Parse a section 12.2 payload. Invalid input raises ValueError before delivery."""
+
+    try:
+        raw = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise ValueError("alarm payload is not json") from exc
+    if not isinstance(raw, dict):
+        raise ValueError("alarm payload is not json")
+    location = raw.get("location")
+    if not isinstance(location, dict) or "longitude" not in location or "latitude" not in location:
+        raise ValueError("alarm payload is missing location")
+    occurred_at = raw.get("occurred_at")
+    if not isinstance(occurred_at, str):
+        raise ValueError("alarm payload is missing occurred_at")
+    if occurred_at.endswith("Z"):
+        occurred_at = occurred_at[:-1] + "+00:00"
+    try:
+        return AlarmEvent(
+            event_id=raw["event_id"],
+            alarm_id=raw["alarm_id"],
+            alarm_type=raw["alarm_type"],
+            vehicle_id=raw["vehicle_id"],
+            driver_id=raw["driver_id"],
+            device_id=raw["device_id"],
+            occurred_at=datetime.fromisoformat(occurred_at),
+            longitude=location["longitude"],
+            latitude=location["latitude"],
+            speed_kmh=raw["speed_kmh"],
+            media_ids=raw["media_ids"],
+            source_confidence=raw["source_confidence"],
+            schema_version=raw["schema_version"],
+        )
+    except (KeyError, TypeError, ValidationError, ValueError) as exc:
+        raise ValueError("alarm payload is invalid") from exc
+
+
+def publish_vehicle_alarm(event: AlarmEvent, send: Callable[[str, bytes], None]) -> None:
+    """Hand one vehicle.alarm payload to the caller-supplied sender."""
+
+    send(_TOPIC, alarm_event_payload(event))
 
 
 class MemoryAlarmTopic:
