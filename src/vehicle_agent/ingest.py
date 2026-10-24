@@ -182,6 +182,51 @@ def device_status_event() -> DeviceStatusEvent:
     )
 
 
+def device_status_payload(event: DeviceStatusEvent) -> bytes:
+    """JSON for one device heartbeat. The timestamp ends in Z."""
+
+    body = {
+        "event_id": event.event_id,
+        "device_id": event.device_id,
+        "online_status": event.online_status,
+        "last_heartbeat_at": event.last_heartbeat_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "schema_version": event.schema_version,
+    }
+    return json.dumps(body, ensure_ascii=False).encode("utf-8")
+
+
+def device_status_from_payload(payload: bytes) -> DeviceStatusEvent:
+    """Parse a device.status payload. Invalid input raises ValueError before delivery."""
+
+    try:
+        raw = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise ValueError("device status payload is not json") from exc
+    if not isinstance(raw, dict):
+        raise ValueError("device status payload is not json")
+    heartbeat = raw.get("last_heartbeat_at")
+    if not isinstance(heartbeat, str):
+        raise ValueError("device status payload is missing last_heartbeat_at")
+    if heartbeat.endswith("Z"):
+        heartbeat = heartbeat[:-1] + "+00:00"
+    try:
+        return DeviceStatusEvent(
+            event_id=raw["event_id"],
+            device_id=raw["device_id"],
+            online_status=raw["online_status"],
+            last_heartbeat_at=datetime.fromisoformat(heartbeat),
+            schema_version=raw["schema_version"],
+        )
+    except (KeyError, TypeError, ValidationError, ValueError) as exc:
+        raise ValueError("device status payload is invalid") from exc
+
+
+def publish_device_status(event: DeviceStatusEvent, send: Callable[[str, bytes], None]) -> None:
+    """Hand one device.status payload to the caller-supplied sender."""
+
+    send(_STATUS_TOPIC, device_status_payload(event))
+
+
 class MemoryDeviceStatusTopic:
     """In-memory device.status log. One event_id becomes one device."""
 

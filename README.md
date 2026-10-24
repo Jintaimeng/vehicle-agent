@@ -51,9 +51,9 @@ FastAPI
 
 `video_backend=ffmpeg` 时，已保存文件、`rtsp://` 和 `jt1078://013800138000/1` 走同一个抽帧入口。这条 JT1078 只映射到 `rtsp://camera/live`，不解析码流。默认定样本时间轴不变。研判图仍调用 `analyze_video`，风险分规则不变。
 
-`vehicle.alarm` 可以编成第 12.2 节的 JSON 再交给现有收件箱；同一个 `event_id` 只留一条。默认测试用假发送器。实机经纪人只在 `VEHICLE_AGENT_RUN_KAFKA=1` 时连接 `127.0.0.1:9092`。研判图不消费它。`device.status` 仍只在内存中。
+`vehicle.alarm` 可以编成第 12.2 节的 JSON 再交给现有收件箱；同一个 `event_id` 只留一条。默认测试用假发送器。实机经纪人只在 `VEHICLE_AGENT_RUN_KAFKA=1` 时连接 `127.0.0.1:9092`。研判图不消费它。
 
-`device.status` 在内存中接收这条 `device_001` 心跳，同一个 `event_id` 只留下一条，且不写入定样本仓储。研判图和设备诊断都不消费它。
+`device.status` 可以编成这条心跳的 JSON 再交给现有收件箱；同一个 `event_id` 只留一条。默认测试用假发送器。实机与 `vehicle.alarm` 共用 `VEHICLE_AGENT_RUN_KAFKA=1` 和 `127.0.0.1:9092`。研判图和设备诊断都不消费它。
 
 本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created` 和前端。
 

@@ -23,3 +23,24 @@ def test_live_kafka_duplicate_publish_keeps_one_alarm() -> None:
     assert first is repeat
     assert [item.id for item in topic.alarms()] == ["alarm_000001"]
     assert first.speed_kmh == 82.5
+
+
+def test_live_kafka_duplicate_device_status_keeps_one_device() -> None:
+    from vehicle_agent.ingest import (
+        MemoryDeviceStatusTopic,
+        device_status_event,
+        device_status_from_payload,
+    )
+    from vehicle_agent.kafka_alarm import exchange_device_status
+
+    event = device_status_event()
+    payloads = exchange_device_status(event)
+    topic = MemoryDeviceStatusTopic()
+    first = topic.deliver(device_status_from_payload(payloads[0]))
+    repeat = topic.deliver(device_status_from_payload(payloads[1]))
+
+    assert len(payloads) == 2
+    assert payloads[0] == payloads[1]
+    assert first is repeat
+    assert [item.id for item in topic.devices()] == ["device_001"]
+    assert first.online_status == "online"
