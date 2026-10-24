@@ -13,7 +13,7 @@ isProject: false
 
 # 26 RTSP 抽帧
 
-上一阶段是已完成的目标跟踪，见 [.cursor/plans/25-object-tracking.plan.md](.cursor/plans/25-object-tracking.plan.md)。本文件是阶段 26，落地到 [.cursor/plans/26-rtsp-stream.plan.md](.cursor/plans/26-rtsp-stream.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 8 周「增加 RTSP 或循环视频流模拟」和第 16.2 节里「视频流 → FFmpeg 解码 → 按策略抽帧」。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、JT1078、Kafka 和前端仍不纳入。
+上一阶段是已完成的目标跟踪，见 [.cursor/plans/25-object-tracking.plan.md](.cursor/plans/25-object-tracking.plan.md)。本文件是阶段 26，落地到 [.cursor/plans/26-rtsp-stream.plan.md](.cursor/plans/26-rtsp-stream.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/27-vehicle-alarm-event.plan.md](.cursor/plans/27-vehicle-alarm-event.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 8 周「增加 RTSP 或循环视频流模拟」和第 16.2 节里「视频流 → FFmpeg 解码 → 按策略抽帧」。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、JT1078、Kafka 和前端仍不纳入。
 
 本阶段只证明一件事：给定 `rtsp://` 地址，代码拼出一条限时 4 秒、每秒一帧的 FFmpeg 命令，并把抽出的 JPEG 和 `pts_time` 配成与 [ffmpeg_extract_frames](src/vehicle_agent/knowledge/video.py) 相同的 `list[tuple[float, bytes]]`。不启动 RTSP 服务，不监听端口，不把地址写进报警或研判图。模型不参与。`risk_score`、复核条件、是否建单和 `prompt_version`（`report-v6`）不变。不新增工具，不新增 HTTP 接口。工具数仍是十一个。`VideoBackend` 仍是 `fixture` 和 `ffmpeg`。默认测试不调用 FFmpeg，也不打开套接字。
 
