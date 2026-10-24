@@ -16,7 +16,7 @@ isProject: false
 
 # 25 目标跟踪
 
-上一阶段是已完成的检测可视化，见 [.cursor/plans/24-detection-visualization.plan.md](.cursor/plans/24-detection-visualization.plan.md)。本文件是阶段 25，落地到 [.cursor/plans/25-object-tracking.plan.md](.cursor/plans/25-object-tracking.plan.md)。下一阶段再写 `.cursor/plans/26-rtsp-stream.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 16.2 节里可选的目标跟踪。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、RTSP、Kafka 和前端仍不纳入。本阶段不单独安装 ByteTrack 或 OpenCV。YOLO 路径使用 Ultralytics 自带的 `model.track`。
+上一阶段是已完成的检测可视化，见 [.cursor/plans/24-detection-visualization.plan.md](.cursor/plans/24-detection-visualization.plan.md)。本文件是阶段 25，落地到 [.cursor/plans/25-object-tracking.plan.md](.cursor/plans/25-object-tracking.plan.md)。下一阶段是 [.cursor/plans/26-rtsp-stream.plan.md](.cursor/plans/26-rtsp-stream.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 16.2 节里可选的目标跟踪。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、RTSP、Kafka 和前端仍不纳入。本阶段不单独安装 ByteTrack 或 OpenCV。YOLO 路径使用 Ultralytics 自带的 `model.track`。
 
 本阶段只证明一件事：同一段连续帧里的检测可以带上轨迹编号。定样本没有像素，编号由代码按相邻帧交并比决定。`vision_backend=yolo` 且帧上有图片字节时，编号来自 YOLO 的 `track`，不再自己做交并比。单张图片的 `analyze` 仍调用 `predict`。模型不改编号。不改 [src/vehicle_agent/knowledge/video.py](src/vehicle_agent/knowledge/video.py) 的 `aggregate_frames`，疲劳驾驶研判图也不调用 `assign_tracks`。`risk_score`、复核条件、是否建单和 `prompt_version`（`report-v6`）不变。不新增工具，不新增 HTTP 接口。工具数仍是十一个。默认测试不解码视频，也不加载 YOLO 权重。
 

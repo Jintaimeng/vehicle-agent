@@ -189,6 +189,8 @@ def packaged_video_timeline(vision: VisionIndex | None = None) -> FixtureVideoTi
 
 VideoBackend = Literal["fixture", "ffmpeg"]
 FrameExtractor = Callable[[Path], list[tuple[float, bytes]]]
+FfmpegRunner = Callable[[list[str], Path], str]
+_RTSP_SCHEME = "rtsp://"
 
 
 class FfmpegVideoTimeline:
@@ -252,36 +254,72 @@ def open_video_timeline(
 def ffmpeg_extract_frames(path: Path) -> list[tuple[float, bytes]]:
     """Sample about one JPEG per second and return pts_time with file bytes."""
 
+    return _collect_sampled_frames(
+        ["ffmpeg", "-hide_banner", "-i", str(path), "-vf", "fps=1,showinfo"],
+        _run_ffmpeg,
+    )
+
+
+def sample_rtsp(url: str, run: FfmpegRunner | None = None) -> list[tuple[float, bytes]]:
+    """Sample one JPEG per second from an rtsp:// URL for at most four seconds."""
+
+    cleaned = url.strip()
+    if not cleaned.startswith(_RTSP_SCHEME) or cleaned == _RTSP_SCHEME:
+        raise ValueError("rtsp url must start with rtsp://")
+    return _collect_sampled_frames(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-rtsp_transport",
+            "tcp",
+            "-t",
+            "4",
+            "-i",
+            cleaned,
+            "-vf",
+            "fps=1,showinfo",
+        ],
+        _run_ffmpeg if run is None else run,
+    )
+
+
+def _run_ffmpeg(argv: list[str], directory: Path) -> str:
+    del directory
+    try:
+        completed = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise FileNotFoundError("ffmpeg is not installed") from exc
+    return completed.stderr
+
+
+def _collect_sampled_frames(argv_prefix: list[str], run: FfmpegRunner) -> list[tuple[float, bytes]]:
     with tempfile.TemporaryDirectory() as directory:
-        pattern = str(Path(directory) / "frame_%04d.jpg")
+        folder = Path(directory)
+        argv = [*argv_prefix, str(folder / "frame_%04d.jpg")]
         try:
-            completed = subprocess.run(
-                [
-                    "ffmpeg",
-                    "-hide_banner",
-                    "-i",
-                    str(path),
-                    "-vf",
-                    "fps=1,showinfo",
-                    pattern,
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            stderr = run(argv, folder)
         except FileNotFoundError as exc:
             raise FileNotFoundError("ffmpeg is not installed") from exc
-        times = [float(item) for item in _PTS_TIME.findall(completed.stderr)]
-        frames = sorted(Path(directory).glob("frame_*.jpg"))
-        if not frames:
-            message = completed.stderr.strip() or "ffmpeg produced no frames"
-            raise RuntimeError(message)
-        if len(frames) != len(times):
-            raise RuntimeError("ffmpeg frame timestamps do not match images")
-        return [
-            (timestamp, frame.read_bytes())
-            for timestamp, frame in zip(times, frames, strict=True)
-        ]
+        return _pair_frame_bytes(stderr, folder)
+
+
+def _pair_frame_bytes(stderr: str, directory: Path) -> list[tuple[float, bytes]]:
+    times = [float(item) for item in _PTS_TIME.findall(stderr)]
+    frames = sorted(directory.glob("frame_*.jpg"))
+    if not frames:
+        message = stderr.strip() or "ffmpeg produced no frames"
+        raise RuntimeError(message)
+    if len(frames) != len(times):
+        raise RuntimeError("ffmpeg frame timestamps do not match images")
+    return [
+        (timestamp, frame.read_bytes())
+        for timestamp, frame in zip(times, frames, strict=True)
+    ]
 
 
 def ffmpeg_sample_timestamps(path: Path) -> list[float]:
