@@ -16,7 +16,7 @@ isProject: false
 
 # 21 车辆风险画像
 
-上一阶段是已完成的算法漂移，见 [.cursor/plans/20-algorithm-drift.plan.md](.cursor/plans/20-algorithm-drift.plan.md)。本文件是阶段 21，落地到 [.cursor/plans/21-vehicle-risk-profile.plan.md](.cursor/plans/21-vehicle-risk-profile.plan.md)。下一阶段再写 `.cursor/plans/22-alarm-root-cause.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 4.4 节和第 14.2 节的 `vehicle-risk-profile`。本阶段只做单车画像。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、根因分析、运营报告、Kafka 和前端仍不纳入。
+上一阶段是已完成的算法漂移，见 [.cursor/plans/20-algorithm-drift.plan.md](.cursor/plans/20-algorithm-drift.plan.md)。本文件是阶段 21，落地到 [.cursor/plans/21-vehicle-risk-profile.plan.md](.cursor/plans/21-vehicle-risk-profile.plan.md)。下一阶段是 [.cursor/plans/22-alarm-root-cause.plan.md](.cursor/plans/22-alarm-root-cause.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 4.4 节和第 14.2 节的 `vehicle-risk-profile`。本阶段只做单车画像。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、根因分析、运营报告、Kafka 和前端仍不纳入。
 
 本阶段只证明一件事：给定车辆标识，代码可以汇总固定时间窗里的疲劳报警和该车设备的未关闭维修，写出一个来源、一个趋势和一句建议。报警类型仍只有 `driver_fatigue`。车速不低于 80 的疲劳报警写成来源 `high_speed_fatigue`，不新增报警类型。80 与 [src/vehicle_agent/graph/scoring.py](src/vehicle_agent/graph/scoring.py) 的高速阈值相同。统计复用只读工具 `list_recent_alarms` 和 `get_device_maintenance`，不改它们的入参，也不调用 `diagnose_device`。设备标识从仓库里的车辆记录读取。模型不选择步骤，也不改来源、趋势或建议。疲劳驾驶研判图不调用这份 Skill。`risk_score`、复核条件、是否建单和 `prompt_version`（`report-v6`）不变。`alarm-verification` 仍是六个只读工具。工具数仍是十一个。
 

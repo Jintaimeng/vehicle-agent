@@ -17,6 +17,8 @@ class AlarmRepository(Protocol):
 
     def find_vehicle_id(self, device_id: str) -> str | None: ...
 
+    def get_alarm(self, alarm_id: str) -> Alarm | None: ...
+
     def list_recent_alarms(
         self,
         vehicle_id: str,

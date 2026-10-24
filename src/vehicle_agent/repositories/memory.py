@@ -73,6 +73,12 @@ class MemoryAlarmRepository:
                 return vehicle.id
         return None
 
+    def get_alarm(self, alarm_id: str) -> Alarm | None:
+        for alarm in self._alarms:
+            if alarm.id == alarm_id:
+                return alarm
+        return None
+
     def list_recent_alarms(
         self,
         vehicle_id: str,
