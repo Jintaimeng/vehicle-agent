@@ -13,7 +13,7 @@ isProject: false
 
 # 24 检测可视化
 
-上一阶段是已完成的运营报告，见 [.cursor/plans/23-operation-report.plan.md](.cursor/plans/23-operation-report.plan.md)。本文件是阶段 24，落地到 [.cursor/plans/24-detection-visualization.plan.md](.cursor/plans/24-detection-visualization.plan.md)。下一阶段再写 `.cursor/plans/25-object-tracking.plan.md`，本阶段不创建该文件。RTSP 排在目标跟踪之后，本阶段也不创建那个计划。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 7 周里尚未落地的检测结果可视化。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、目标跟踪、RTSP、Kafka 和前端仍不纳入。
+上一阶段是已完成的运营报告，见 [.cursor/plans/23-operation-report.plan.md](.cursor/plans/23-operation-report.plan.md)。本文件是阶段 24，落地到 [.cursor/plans/24-detection-visualization.plan.md](.cursor/plans/24-detection-visualization.plan.md)。下一阶段是 [.cursor/plans/25-object-tracking.plan.md](.cursor/plans/25-object-tracking.plan.md)。RTSP 排在目标跟踪之后，本阶段也不创建那个计划。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 7 周里尚未落地的检测结果可视化。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、目标跟踪、RTSP、Kafka 和前端仍不纳入。
 
 本阶段只证明一件事：给定现有检测框，代码可以在 100×100 的黑底上画出一像素宽的白框，并返回这张图的字节。画布尺寸固定，不读取、不解码已保存的图片。`image_closed_eye` 的框仍是 [0.4, 0.2, 0.62, 0.55]，类别和置信度不变。模型不参与。疲劳驾驶研判图不调用这次绘制。`risk_score`、复核条件、是否建单和 `prompt_version`（`report-v6`）不变。不新增工具，不新增 HTTP 接口。工具数仍是十一个。不安装 OpenCV、Pillow 或 ultralytics。默认测试不解码像素。
 

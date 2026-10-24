@@ -62,6 +62,84 @@ def aggregate_frames(frames: list[VideoFrame], speed_kmh: float) -> VideoOutcome
     return VideoOutcome(frames=ordered, event=event, occlusion=occlusion)
 
 
+class TrackAssignment(BaseModel):
+    timestamp_s: float
+    image_id: str
+    detection: Detection
+    track_id: int
+
+
+_MIN_IOU = 0.5
+
+
+def assign_tracks(frames: list[VideoFrame]) -> list[TrackAssignment]:
+    """Give each detection a track id from the previous frame only."""
+
+    ordered = sorted(frames, key=lambda item: item.timestamp_s)
+    assignments: list[TrackAssignment] = []
+    previous: list[tuple[Detection, int]] = []
+    next_id = 1
+    for frame in ordered:
+        current: list[tuple[Detection, int]] = []
+        used: set[int] = set()
+        for detection in frame.detections:
+            match = _best_track(detection, previous, used)
+            if match is None:
+                track_id = next_id
+                next_id += 1
+            else:
+                used.add(match)
+                track_id = previous[match][1]
+            current.append((detection, track_id))
+            assignments.append(
+                TrackAssignment(
+                    timestamp_s=frame.timestamp_s,
+                    image_id=frame.image_id,
+                    detection=detection,
+                    track_id=track_id,
+                )
+            )
+        previous = current
+    return assignments
+
+
+def _best_track(
+    detection: Detection,
+    previous: list[tuple[Detection, int]],
+    used: set[int],
+) -> int | None:
+    best_index: int | None = None
+    best_iou = -1.0
+    for index, (prior, _track_id) in enumerate(previous):
+        if index in used or prior.label != detection.label:
+            continue
+        score = _iou(prior.bbox, detection.bbox)
+        if score + 1e-9 < _MIN_IOU or score <= best_iou:
+            continue
+        best_iou = score
+        best_index = index
+    return best_index
+
+
+def _iou(
+    left: tuple[float, float, float, float],
+    right: tuple[float, float, float, float],
+) -> float:
+    ix1 = max(left[0], right[0])
+    iy1 = max(left[1], right[1])
+    ix2 = min(left[2], right[2])
+    iy2 = min(left[3], right[3])
+    intersection = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+    if intersection == 0:
+        return 0.0
+    area_left = max(0.0, left[2] - left[0]) * max(0.0, left[3] - left[1])
+    area_right = max(0.0, right[2] - right[0]) * max(0.0, right[3] - right[1])
+    union = area_left + area_right - intersection
+    if union <= 0:
+        return 0.0
+    return intersection / union
+
+
 class FixtureVideoTimeline:
     """Timestamped image ids. File bytes are ignored so tests do not decode video."""
 
@@ -135,14 +213,27 @@ class FfmpegVideoTimeline:
         if not extracted:
             raise RuntimeError(f"ffmpeg produced no frames: {video_id}")
         frames: list[VideoFrame] = []
-        for index, (timestamp, jpeg) in enumerate(extracted):
+        track_frames = getattr(self._vision, "track_frames", None)
+        if track_frames is None:
+            detected = [
+                self._vision.analyze(f"{video_id}__{index}", jpeg)
+                for index, (_timestamp, jpeg) in enumerate(extracted)
+            ]
+        else:
+            detected = [
+                [item.detection for item in frame]
+                for frame in track_frames([jpeg for _timestamp, jpeg in extracted])
+            ]
+        for index, ((timestamp, jpeg), detections) in enumerate(
+            zip(extracted, detected, strict=True)
+        ):
             image_id = f"{video_id}__{index}"
             store_image(self._store, image_id, jpeg)
             frames.append(
                 VideoFrame(
                     timestamp_s=timestamp,
                     image_id=image_id,
-                    detections=self._vision.analyze(image_id, jpeg),
+                    detections=detections,
                 )
             )
         return aggregate_frames(frames, speed_kmh)

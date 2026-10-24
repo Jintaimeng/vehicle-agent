@@ -30,3 +30,21 @@ def test_yolo_returns_boxes_inside_allowed_labels() -> None:
     for item in detections:
         assert item.label in VISION_LABELS
         assert all(0 <= value <= 1 for value in item.bbox)
+
+
+def test_yolo_track_frames_returns_integer_ids() -> None:
+    settings = Settings()
+    weights = Path(settings.yolo_weights)
+    image = Path(os.environ.get("VEHICLE_AGENT_YOLO_IMAGE", "data/vision-sample.jpg"))
+    if not weights.is_file():
+        pytest.skip(f"YOLO weights not found: {weights}")
+    if not image.is_file():
+        pytest.skip(f"sample image not found: {image}")
+
+    content = image.read_bytes()
+    tracked = YoloVisionIndex(str(weights)).track_frames([content, content])
+    ids = [item.track_id for frame in tracked for item in frame if item.track_id is not None]
+
+    assert len(tracked) == 2
+    assert ids
+    assert all(isinstance(item, int) for item in ids)

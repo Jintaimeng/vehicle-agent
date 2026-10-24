@@ -57,6 +57,11 @@ def packaged_vision_index() -> FixtureVisionIndex:
     return FixtureVisionIndex.from_file(root)
 
 
+class TrackedDetection(BaseModel):
+    detection: Detection
+    track_id: int | None = None
+
+
 class YoloVisionIndex:
     """Optional detector. ultralytics is imported only when this backend is used."""
 
@@ -73,29 +78,51 @@ class YoloVisionIndex:
             results = model.predict(path, verbose=False)
         finally:
             Path(path).unlink(missing_ok=True)
+        return [item.detection for item in self._collect(results, model)]
+
+    def track_frames(self, frames: list[bytes]) -> list[list[TrackedDetection]]:
+        """Track one sequence with the bundled YOLO tracker, then clear its state."""
+
+        model = self._load()
+        tracked: list[list[TrackedDetection]] = []
+        try:
+            for content in frames:
+                path = _write_temp_image(content)
+                try:
+                    results = model.track(path, persist=True, verbose=False)
+                finally:
+                    Path(path).unlink(missing_ok=True)
+                tracked.append(self._collect(results, model))
+        finally:
+            _reset_yolo_tracker(model)
+        return tracked
+
+    def _collect(self, results, model) -> list[TrackedDetection]:
         if not results:
             return []
         result = results[0]
         height, width = result.orig_shape
         version = Path(self._weights).name
-        detections: list[Detection] = []
         boxes = result.boxes
         if boxes is None:
             return []
+        tracked: list[TrackedDetection] = []
         for box in boxes:
             label = map_vision_label(model.names[int(box.cls[0])])
             if label is None:
                 continue
-            xyxy = box.xyxy[0].tolist()
-            detections.append(
-                Detection(
-                    label=label,
-                    confidence=float(box.conf[0]),
-                    bbox=_clamp_bbox(xyxy, width, height),
-                    model_version=version,
+            tracked.append(
+                TrackedDetection(
+                    detection=Detection(
+                        label=label,
+                        confidence=float(box.conf[0]),
+                        bbox=_clamp_bbox(box.xyxy[0].tolist(), width, height),
+                        model_version=version,
+                    ),
+                    track_id=_box_track_id(box),
                 )
             )
-        return detections
+        return tracked
 
     def _load(self):
         if self._model is not None:
@@ -109,6 +136,19 @@ class YoloVisionIndex:
             raise FileNotFoundError(f"YOLO weights not found: {weights}")
         self._model = YOLO(str(weights))
         return self._model
+
+
+def _box_track_id(box) -> int | None:
+    raw = getattr(box, "id", None)
+    if raw is None:
+        return None
+    return int(raw[0])
+
+
+def _reset_yolo_tracker(model) -> None:
+    predictor = getattr(model, "predictor", None)
+    if predictor is not None and hasattr(predictor, "trackers"):
+        predictor.trackers = []
 
 
 class ObservationUnavailable(Exception):
