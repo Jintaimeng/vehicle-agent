@@ -152,6 +152,13 @@ class MemoryAlarmTopic:
         return list(self._alarms.values())
 
 
+def alarm_from_published_event(payload: bytes, topic: MemoryAlarmTopic | None = None) -> Alarm:
+    """Parse one vehicle.alarm payload and return the inbox alarm for that event."""
+
+    inbox = MemoryAlarmTopic() if topic is None else topic
+    return inbox.deliver(alarm_event_from_payload(payload))
+
+
 class DeviceStatusEvent(BaseModel):
     """One device.status payload. It does not update the seeded device table."""
 

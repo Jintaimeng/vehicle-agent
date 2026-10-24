@@ -13,7 +13,7 @@ isProject: false
 
 # 32 Kafka 设备状态
 
-上一阶段是已完成的 Kafka 报警主题，见 [.cursor/plans/31-kafka-alarm-topic.plan.md](.cursor/plans/31-kafka-alarm-topic.plan.md)。本文件是阶段 32，落地到 [.cursor/plans/32-kafka-device-status.plan.md](.cursor/plans/32-kafka-device-status.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段再写 `.cursor/plans/33-alarm-event-judgement.plan.md`，本阶段不创建该文件。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 12.1 节的 `device.status`。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、手机使用研判、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created` 和前端仍不纳入。
+上一阶段是已完成的 Kafka 报警主题，见 [.cursor/plans/31-kafka-alarm-topic.plan.md](.cursor/plans/31-kafka-alarm-topic.plan.md)。本文件是阶段 32，落地到 [.cursor/plans/32-kafka-device-status.plan.md](.cursor/plans/32-kafka-device-status.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/33-alarm-event-judgement.plan.md](.cursor/plans/33-alarm-event-judgement.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 12.1 节的 `device.status`。驾驶员汇总、企业汇总、路线偏离、独立的超速报警类型、手机使用研判、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created` 和前端仍不纳入。
 
 本阶段只证明一件事：`device_status_event()` 可以编成 JSON，发到名为 `device.status` 的主题，再解析回来交给现有 [MemoryDeviceStatusTopic.deliver](src/vehicle_agent/ingest.py)。同一个 `event_id` 投递两次，收件箱仍是一条，状态仍是 `online`。幂等留在现有收件箱，不使用 Kafka 事务。模型不参与。不写入定样本仓储，不调用 `diagnose_device`，不调用研判图。`risk_score`、复核条件、是否建单和 `prompt_version`（`report-v6`）不变。不新增工具，不新增 HTTP 接口，不新增依赖，不改 Compose。工具数仍是十一个。`vehicle.alarm` 的 JSON 和主题名不变。默认测试不连接经纪人。
 
