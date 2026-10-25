@@ -61,7 +61,7 @@ FastAPI
 
 lite 容器用 `docker compose -f deployments/docker-compose.yml up -d api` 启动。它使用定样本和固定模型输出，不启动 Neo4j、Qdrant、Kafka，也不调用在线模型。演示脚本那条车速 85、置信度 0.9 的报警风险分是 `1.0`。
 
-要让同一个 `api` 容器自己消费 `vehicle.alarm`，叠上接入文件。容器内经纪人地址是 `kafka:29092`。宿主机仍向 `127.0.0.1:9092` 发布。这条定样本的风险分是 `0.95`，`task_id` 是 `evt_20261009_000001`。重启 `api` 后，`wo-evt_20261009_000001` 仍是 `open`。
+要让同一个 `api` 容器自己消费 `vehicle.alarm`，叠上接入文件。容器内经纪人地址是 `kafka:29092`。未设置 `KAFKA_ADVERTISED_HOST` 时，宿主机广告地址仍是 `127.0.0.1:9092`。换机器时在启动前把 `KAFKA_ADVERTISED_HOST` 设成那台机器能访问到的地址，不带协议和端口。这条定样本的风险分是 `0.95`，`task_id` 是 `evt_20261009_000001`。重启 `api` 后，`wo-evt_20261009_000001` 仍是 `open`。
 
 ```powershell
 docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.ingest.yml up -d kafka api
@@ -75,7 +75,7 @@ docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.i
 
 推送和拉取请求会在 runner 的临时环境里安装 `.[dev]`，然后执行 `uv run ruff check src tests scripts` 和 `uv run pytest`。不设置实机验收开关，因此不连接 Kafka、Compose、Neo4j、Qdrant 或在线模型，也不构建镜像。
 
-本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes 和前端。
+本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、镜像构建、模型就绪检查、API 鉴权、Kubernetes 和前端。
 
 ## 环境
 
@@ -107,7 +107,7 @@ D:\uv_venv\Scripts\python.exe scripts\demo.py
 D:\uv_venv\Scripts\python.exe -m vehicle_agent.api.main
 ```
 
-常驻消费 `vehicle.alarm` 时设置 `VEHICLE_AGENT_INGEST=kafka`。经纪人地址是 `VEHICLE_AGENT_KAFKA_BOOTSTRAP`，默认 `127.0.0.1:9092`。先启动 Kafka，再启动本进程。只启动 lite 容器时不设置这项。叠上 `deployments/docker-compose.ingest.yml` 时，容器内地址是 `kafka:29092`。
+常驻消费 `vehicle.alarm` 时设置 `VEHICLE_AGENT_INGEST=kafka`。经纪人地址是 `VEHICLE_AGENT_KAFKA_BOOTSTRAP`，默认 `127.0.0.1:9092`。先启动 Kafka，再启动本进程。只启动 lite 容器时不设置这项。叠上 `deployments/docker-compose.ingest.yml` 时，容器内地址是 `kafka:29092`。未设置 `KAFKA_ADVERTISED_HOST` 时，对外广告仍是 `127.0.0.1:9092`。
 
 不需要在线模型时，用 lite 容器。它把 `VEHICLE_AGENT_MODEL_BACKEND` 设为 `fixture`，监听 `0.0.0.0:8000`，检查点写到卷里的 `/data/checkpoints.sqlite`。`ingest=off` 时 `GET /health` 只返回进程可用，不调用模型。`VEHICLE_AGENT_INGEST=kafka` 时，尚未分到分区是 `503` 和 `starting`，分到之后才是 `ok`。
 
