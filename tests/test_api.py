@@ -19,12 +19,13 @@ REPORT = json.dumps(
 
 
 def _client(tmp_path, *, content: str = REPORT, **settings):
-    config = Settings(max_retries=1, **settings)
+    checkpoint = tmp_path / "checkpoints.sqlite"
+    config = Settings(max_retries=1, checkpoint_path=str(checkpoint), **settings)
     app = create_app(
         config,
         build_seed_repository(),
         FakeModelAdapter(content),
-        open_checkpointer(tmp_path / "checkpoints.sqlite"),
+        open_checkpointer(checkpoint),
     )
     return TestClient(app)
 

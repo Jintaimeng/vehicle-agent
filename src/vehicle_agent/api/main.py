@@ -29,7 +29,12 @@ from vehicle_agent.knowledge.vision import open_vision_index, store_image, store
 from vehicle_agent.mcp.client import open_registered_tools
 from vehicle_agent.repositories.base import AlarmRepository
 from vehicle_agent.repositories.memory import build_seed_repository
-from vehicle_agent.workorders import CreateWorkOrderInput, MemoryWorkOrderStore, WorkOrder
+from vehicle_agent.workorders import (
+    CreateWorkOrderInput,
+    SqliteWorkOrderStore,
+    WorkOrder,
+    workorder_sqlite_path,
+)
 
 
 class VisionImageView(BaseModel):
@@ -81,7 +86,7 @@ def create_app(
         if video_timeline is None
         else video_timeline
     )
-    orders = MemoryWorkOrderStore()
+    orders = SqliteWorkOrderStore(workorder_sqlite_path(settings.checkpoint_path))
     tools, mcp_session = open_registered_tools(
         settings, repository, regulations, index, vision, timeline, workorders=orders
     )
@@ -106,6 +111,7 @@ def create_app(
                 worker.join(timeout=2)
             if mcp_session is not None:
                 mcp_session.close()
+            orders.close()
             _close_index(index)
             _close_index(regulations)
 

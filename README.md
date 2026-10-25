@@ -53,11 +53,13 @@ FastAPI
 
 `VEHICLE_AGENT_INGEST=kafka` 时，进程常驻消费 `vehicle.alarm`。这条定样本的风险分是 `0.95`，没有图片和视频，所以不跑视觉，`task_id` 是 `evt_20261009_000001`。同一个 `event_id` 不再研判第二次，车速仍是 `82.5`。默认 `VEHICLE_AGENT_INGEST=off`，不连接经纪人。默认测试用假发送器。实机经纪人只在 `VEHICLE_AGENT_RUN_KAFKA=1` 时连接 `127.0.0.1:9092`。`device.status` 仍不消费。
 
+研判工单写在检查点旁边的 `workorders.sqlite`。这条定样本重启后仍是 `wo-evt_20261009_000001`，状态是 `open`。同一个 `task_id` 再创建一次，返回原来的工单。运营报告的定样本工单仍在内存。lite 容器不用改启动命令。
+
 `device.status` 可以编成这条心跳的 JSON 再交给现有收件箱；同一个 `event_id` 只留一条。默认测试用假发送器。实机与 `vehicle.alarm` 共用 `VEHICLE_AGENT_RUN_KAFKA=1` 和 `127.0.0.1:9092`。研判图和设备诊断都不消费它。
 
 lite 容器用 `docker compose -f deployments/docker-compose.yml up -d api` 启动。它使用定样本和固定模型输出，不启动 Neo4j、Qdrant、Kafka，也不调用在线模型。演示脚本那条车速 85、置信度 0.9 的报警风险分是 `1.0`。
 
-本阶段不包含工单落盘、冒烟流水线、驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes 和前端。
+本阶段不包含在线模型切换、冒烟流水线、驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes 和前端。
 
 ## 环境
 

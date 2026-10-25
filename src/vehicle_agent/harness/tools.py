@@ -24,6 +24,7 @@ from vehicle_agent.workorders import (
     CreateWorkOrderInput,
     GetWorkOrderInput,
     MemoryWorkOrderStore,
+    SqliteWorkOrderStore,
     UpdateWorkOrderInput,
     WorkOrder,
 )
@@ -136,7 +137,7 @@ def build_vehicle_tools(
     vision: VisionIndex | None = None,
     timeline: VideoTimeline | None = None,
     settings: Settings | None = None,
-    workorders: MemoryWorkOrderStore | None = None,
+    workorders: MemoryWorkOrderStore | SqliteWorkOrderStore | None = None,
 ) -> ToolRegistry:
     runtime = settings or Settings()
     index = packaged_regulation_index() if regulations is None else regulations
