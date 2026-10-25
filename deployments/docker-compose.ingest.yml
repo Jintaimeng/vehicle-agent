@@ -1,0 +1,9 @@
+# 叠在 deployments/docker-compose.yml 上，让 api 常驻消费 vehicle.alarm。
+# 不要单独使用本文件。lite 启动仍是基础文件里的 `up -d api`，那个服务不连接 Kafka。
+services:
+  api:
+    environment:
+      VEHICLE_AGENT_INGEST: kafka
+      VEHICLE_AGENT_KAFKA_BOOTSTRAP: kafka:29092
+    depends_on:
+      - kafka

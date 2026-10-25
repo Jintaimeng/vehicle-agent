@@ -333,7 +333,12 @@ def handle_alarm_payload(
         return None
 
 
+_INGEST_RETRY_SECONDS = 1.0
+
+
 def _serve_alarm_ingest(bootstrap: str, graph, stop: threading.Event) -> None:
+    """Keep polling vehicle.alarm. A broker that is not up yet is tried again."""
+
     from vehicle_agent.kafka_alarm import serve_vehicle_alarms
 
     topic = MemoryAlarmTopic()
@@ -342,7 +347,14 @@ def _serve_alarm_ingest(bootstrap: str, graph, stop: threading.Event) -> None:
     def handle(payload: bytes) -> None:
         handle_alarm_payload(payload, graph, topic, judged)
 
-    serve_vehicle_alarms(bootstrap, handle, stop.is_set)
+    while not stop.is_set():
+        try:
+            serve_vehicle_alarms(bootstrap, handle, stop.is_set)
+        except Exception:
+            if stop.wait(_INGEST_RETRY_SECONDS):
+                return
+            continue
+        return
 
 
 def _initial_state(task_id: str, alarm: Alarm) -> dict:

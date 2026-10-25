@@ -1,10 +1,15 @@
 import json
+import threading
 from datetime import UTC, datetime
 
 import pytest
 
 from test_graph import _run
-from vehicle_agent.api.main import handle_alarm_payload, ingest_alarm_payload
+from vehicle_agent.api.main import (
+    _serve_alarm_ingest,
+    handle_alarm_payload,
+    ingest_alarm_payload,
+)
 from vehicle_agent.config import Settings
 from vehicle_agent.ingest import (
     MemoryAlarmTopic,
@@ -123,6 +128,23 @@ def test_existing_checkpoint_skips_a_second_invoke(tmp_path) -> None:
     )
 
     assert task_id == _EVENT_ID
+
+
+def test_alarm_ingest_retries_until_the_broker_accepts(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def serve(bootstrap: str, _handle, _stop) -> None:
+        calls.append(bootstrap)
+        if len(calls) == 1:
+            raise OSError("broker down")
+
+    monkeypatch.setattr("vehicle_agent.kafka_alarm.serve_vehicle_alarms", serve)
+    monkeypatch.setattr("vehicle_agent.api.main._INGEST_RETRY_SECONDS", 0)
+    stop = threading.Event()
+
+    _serve_alarm_ingest("kafka:29092", object(), stop)
+
+    assert calls == ["kafka:29092", "kafka:29092"]
 
 
 def test_ingest_defaults_stay_off() -> None:

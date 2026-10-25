@@ -21,8 +21,22 @@ COMPOSE = [
     "-f",
     str(ROOT / "deployments" / "docker-compose.yml"),
 ]
+INGEST_COMPOSE = [
+    "docker",
+    "compose",
+    "-p",
+    "vehicle-agent-ingest",
+    "-f",
+    str(ROOT / "deployments" / "docker-compose.yml"),
+    "-f",
+    str(ROOT / "deployments" / "docker-compose.ingest.yml"),
+]
 HEALTH_URL = "http://127.0.0.1:8000/health"
 JUDGEMENT_URL = "http://127.0.0.1:8000/api/v1/judgements"
+INGEST_EVENT_ID = "evt_20261009_000001"
+INGEST_WORKORDER_URL = (
+    "http://127.0.0.1:8000/api/v1/workorders/wo-evt_20261009_000001"
+)
 
 
 def test_compose_api_scores_demo_alarm() -> None:
@@ -40,6 +54,38 @@ def test_compose_api_scores_demo_alarm() -> None:
     assert body["workorder_id"] == f"wo-{body['task_id']}"
 
 
+def test_compose_ingest_judges_one_alarm_and_keeps_the_workorder() -> None:
+    subprocess.run([*INGEST_COMPOSE, "down", "-v"], cwd=ROOT, check=True)
+    try:
+        subprocess.run(
+            [*INGEST_COMPOSE, "up", "-d", "--build", "kafka", "api"],
+            cwd=ROOT,
+            check=True,
+        )
+        _wait_until_healthy()
+        from vehicle_agent.ingest import fatigue_alarm_event
+        from vehicle_agent.kafka_alarm import exchange_vehicle_alarm
+
+        payloads = exchange_vehicle_alarm(fatigue_alarm_event())
+        assert len(payloads) == 2
+        viewed = _wait_for_ingested_judgement()
+        order = _get_json(INGEST_WORKORDER_URL)
+        subprocess.run([*INGEST_COMPOSE, "restart", "api"], cwd=ROOT, check=True)
+        _wait_until_healthy()
+        restarted = _wait_for_ingested_judgement()
+        restarted_order = _get_json(INGEST_WORKORDER_URL)
+    finally:
+        subprocess.run([*INGEST_COMPOSE, "down", "-v"], cwd=ROOT, check=False)
+
+    assert viewed["status"] == "completed"
+    assert viewed["result"]["risk_score"] == 0.95
+    assert viewed["result"]["risk_level"] == "high"
+    assert order["workorder_id"] == "wo-evt_20261009_000001"
+    assert order["status"] == "open"
+    assert restarted["result"]["risk_score"] == 0.95
+    assert restarted_order["status"] == "open"
+
+
 def _wait_until_healthy() -> None:
     deadline = time.monotonic() + 90
     last_error: Exception | None = None
@@ -48,10 +94,37 @@ def _wait_until_healthy() -> None:
             with urllib.request.urlopen(HEALTH_URL, timeout=2) as response:
                 if response.status == 200 and json.load(response) == {"status": "ok"}:
                     return
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ConnectionError) as exc:
             last_error = exc
         time.sleep(1)
     raise AssertionError(f"api health check failed: {last_error}")
+
+
+def _wait_for_ingested_judgement() -> dict:
+    deadline = time.monotonic() + 90
+    last_error: Exception | None = None
+    url = f"{JUDGEMENT_URL}/{INGEST_EVENT_ID}"
+    while time.monotonic() < deadline:
+        try:
+            body = _get_json(url)
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            json.JSONDecodeError,
+            ConnectionError,
+        ) as exc:
+            last_error = exc
+        else:
+            if body.get("result", {}).get("risk_score") == 0.95:
+                return body
+            last_error = AssertionError(body)
+        time.sleep(1)
+    raise AssertionError(f"ingested judgement was not ready: {last_error}")
+
+
+def _get_json(url: str) -> dict:
+    with urllib.request.urlopen(url, timeout=5) as response:
+        return json.load(response)
 
 
 def _post_demo_alarm() -> dict:
