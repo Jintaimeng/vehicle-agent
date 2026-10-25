@@ -34,6 +34,7 @@ def exchange_device_status(
 def _exchange(topic: str, payload: bytes, bootstrap: str, timeout_s: float) -> list[bytes]:
     from confluent_kafka import Consumer, Producer, TopicPartition
 
+    _ensure_topic(bootstrap, topic)
     consumer = Consumer(
         {
             "bootstrap.servers": bootstrap,
@@ -66,6 +67,24 @@ def _exchange(topic: str, payload: bytes, bootstrap: str, timeout_s: float) -> l
         return found
     finally:
         consumer.close()
+
+
+def _ensure_topic(bootstrap: str, topic: str) -> None:
+    """Create the topic when the broker does not auto-create it."""
+
+    from confluent_kafka import KafkaError, KafkaException
+    from confluent_kafka.admin import AdminClient, NewTopic
+
+    admin = AdminClient({"bootstrap.servers": bootstrap})
+    future = admin.create_topics(
+        [NewTopic(topic, num_partitions=1, replication_factor=1)],
+        request_timeout=10,
+    )[topic]
+    try:
+        future.result(timeout=10)
+    except KafkaException as exc:
+        if exc.args[0].code() != KafkaError.TOPIC_ALREADY_EXISTS:
+            raise
 
 
 def _assigned(consumer, deadline: float) -> list:
