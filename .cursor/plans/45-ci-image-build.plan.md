@@ -13,7 +13,7 @@ isProject: false
 
 # 45 流水线构建镜像
 
-上一阶段是已完成的 Kafka 广告地址，见 [.cursor/plans/44-kafka-advertised-host.plan.md](.cursor/plans/44-kafka-advertised-host.plan.md)。本文件是阶段 45，落地到 [.cursor/plans/45-ci-image-build.plan.md](.cursor/plans/45-ci-image-build.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。模型就绪检查、API 鉴权、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes 和前端仍不纳入。不改 Kafka 广告地址。
+上一阶段是已完成的 Kafka 广告地址，见 [.cursor/plans/44-kafka-advertised-host.plan.md](.cursor/plans/44-kafka-advertised-host.plan.md)。本文件是阶段 45，落地到 [.cursor/plans/45-ci-image-build.plan.md](.cursor/plans/45-ci-image-build.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/46-model-readiness.plan.md](.cursor/plans/46-model-readiness.plan.md)。模型就绪检查、API 鉴权、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes 和前端仍不纳入。不改 Kafka 广告地址。
 
 本阶段只证明一件事：推送和拉取请求在 `ruff` 与默认 `pytest` 通过后，用现有 [deployments/Dockerfile](deployments/Dockerfile) 打出镜像 `vehicle-agent:ci`，并且这个镜像里没有 `ultralytics`。镜像只留在 runner 上，不登录仓库，也不推送。不改 Dockerfile：它仍然 `uv pip install --system --no-cache .`，不安装 `.[vision]`，`VEHICLE_AGENT_MODEL_BACKEND` 仍是 `fixture`。图、分数、建单规则和工具数不变。`prompt_version` 仍是 `report-v6`。不新增 HTTP 路径，不改三份 Compose 文件。高速无图样例的 `risk_score` 仍是 `1.0`。定样本在 `fixture` 下仍是 `0.95`。本阶段不推送 `master`。
 

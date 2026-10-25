@@ -3,6 +3,7 @@ import threading
 import time
 from datetime import UTC, datetime
 
+import httpx
 from fastapi.testclient import TestClient
 
 from vehicle_agent.api.main import create_app, open_model
@@ -202,7 +203,7 @@ def test_missing_task_uses_error_body(tmp_path) -> None:
 
 
 def test_health_does_not_call_the_model(tmp_path) -> None:
-    client = _client(tmp_path)
+    client = _client(tmp_path, model_backend="fixture")
 
     response = client.get("/health")
 
@@ -220,7 +221,7 @@ def test_kafka_health_stays_starting_until_the_consumer_is_ready(tmp_path, monke
             time.sleep(0.01)
 
     monkeypatch.setattr("vehicle_agent.kafka_alarm.serve_vehicle_alarms", serve)
-    with _client(tmp_path, ingest="kafka") as client:
+    with _client(tmp_path, ingest="kafka", model_backend="fixture") as client:
         assert entered.wait(2)
         starting = client.get("/health")
         client.app.state.ingest_ready.set()
@@ -230,6 +231,34 @@ def test_kafka_health_stays_starting_until_the_consumer_is_ready(tmp_path, monke
     assert starting.json() == {"status": "starting"}
     assert ready.status_code == 200
     assert ready.json() == {"status": "ok"}
+
+
+def test_openai_health_follows_the_models_probe(tmp_path) -> None:
+    calls: list[httpx.Request] = []
+    failed = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal failed
+        calls.append(request)
+        if failed:
+            raise httpx.ConnectError("refused")
+        return httpx.Response(200)
+
+    probe = httpx.Client(base_url="http://model.test/v1/", transport=httpx.MockTransport(handler))
+    with _client(tmp_path, model_backend="openai") as client:
+        client.app.state.model_probe_client = probe
+        ready = client.get("/health")
+        failed = True
+        down = client.get("/health")
+
+    assert ready.status_code == 200
+    assert ready.json() == {"status": "ok"}
+    assert down.status_code == 503
+    assert down.json() == {"status": "unavailable"}
+    assert calls
+    for request in calls:
+        assert request.url.path.endswith("/models")
+        assert not request.url.path.endswith("/chat/completions")
 
 
 def test_fixture_backend_scores_demo_alarm(tmp_path) -> None:

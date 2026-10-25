@@ -51,7 +51,7 @@ FastAPI
 
 `video_backend=ffmpeg` 时，已保存文件、`rtsp://` 和 `jt1078://013800138000/1` 走同一个抽帧入口。这条 JT1078 只映射到 `rtsp://camera/live`，不解析码流。默认定样本时间轴不变。研判图仍调用 `analyze_video`，风险分规则不变。
 
-`VEHICLE_AGENT_INGEST=kafka` 时，进程常驻消费 `vehicle.alarm`。经纪人暂时连不上时，接入线程会再试，直到进程停止。消费组还没有分到分区时，`GET /health` 是 `503` 和 `{"status":"starting"}`；分到分区之后才是 `200` 和 `{"status":"ok"}`。`ingest=off` 时 `/health` 仍只表示进程可用。这条定样本的风险分是 `0.95`，没有图片和视频，所以不跑视觉，`task_id` 是 `evt_20261009_000001`。同一个 `event_id` 不再研判第二次，车速仍是 `82.5`。默认 `VEHICLE_AGENT_INGEST=off`，不连接经纪人。默认测试用假发送器。实机经纪人只在 `VEHICLE_AGENT_RUN_KAFKA=1` 时连接 `127.0.0.1:9092`。`device.status` 仍不消费。
+`VEHICLE_AGENT_INGEST=kafka` 时，进程常驻消费 `vehicle.alarm`。经纪人暂时连不上时，接入线程会再试，直到进程停止。消费组还没有分到分区时，`GET /health` 是 `503` 和 `{"status":"starting"}`；分到分区之后才是 `200` 和 `{"status":"ok"}`。`model_backend=fixture` 时 `/health` 不调用模型。`model_backend=openai` 时先请求文本模型的 `/models`：连不上、超时或状态码不是 200 是 `503` 和 `{"status":"unavailable"}`，返回 200 后才是 `ok`。Kafka 尚未分到分区时仍先返回 `starting`，此时不访问模型。这条定样本的风险分是 `0.95`，没有图片和视频，所以不跑视觉，`task_id` 是 `evt_20261009_000001`。同一个 `event_id` 不再研判第二次，车速仍是 `82.5`。默认 `VEHICLE_AGENT_INGEST=off`，不连接经纪人。默认测试用假发送器。实机经纪人只在 `VEHICLE_AGENT_RUN_KAFKA=1` 时连接 `127.0.0.1:9092`。`device.status` 仍不消费。
 
 研判工单写在检查点旁边的 `workorders.sqlite`。这条定样本重启后仍是 `wo-evt_20261009_000001`，状态是 `open`。同一个 `task_id` 再创建一次，返回原来的工单。运营报告的定样本工单仍在内存。lite 容器不用改启动命令。
 
@@ -75,7 +75,7 @@ docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.i
 
 推送和拉取请求会在 runner 的临时环境里安装 `.[dev]`，然后执行 `uv run ruff check src tests scripts` 和 `uv run pytest`。通过后用 `deployments/Dockerfile` 构建 `vehicle-agent:ci`，并确认镜像里没有 `ultralytics`、`VEHICLE_AGENT_MODEL_BACKEND` 是 `fixture`。镜像不推送。不设置实机验收开关，因此不连接 Kafka、Compose、Neo4j、Qdrant 或在线模型。
 
-本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、模型就绪检查、API 鉴权、Kubernetes 和前端。
+本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、API 鉴权、Kubernetes 和前端。
 
 ## 环境
 
@@ -109,7 +109,7 @@ D:\uv_venv\Scripts\python.exe -m vehicle_agent.api.main
 
 常驻消费 `vehicle.alarm` 时设置 `VEHICLE_AGENT_INGEST=kafka`。经纪人地址是 `VEHICLE_AGENT_KAFKA_BOOTSTRAP`，默认 `127.0.0.1:9092`。先启动 Kafka，再启动本进程。只启动 lite 容器时不设置这项。叠上 `deployments/docker-compose.ingest.yml` 时，容器内地址是 `kafka:29092`。未设置 `KAFKA_ADVERTISED_HOST` 时，对外广告仍是 `127.0.0.1:9092`。
 
-不需要在线模型时，用 lite 容器。它把 `VEHICLE_AGENT_MODEL_BACKEND` 设为 `fixture`，监听 `0.0.0.0:8000`，检查点写到卷里的 `/data/checkpoints.sqlite`。`ingest=off` 时 `GET /health` 只返回进程可用，不调用模型。`VEHICLE_AGENT_INGEST=kafka` 时，尚未分到分区是 `503` 和 `starting`，分到之后才是 `ok`。
+不需要在线模型时，用 lite 容器。它把 `VEHICLE_AGENT_MODEL_BACKEND` 设为 `fixture`，监听 `0.0.0.0:8000`，检查点写到卷里的 `/data/checkpoints.sqlite`。`model_backend=fixture` 时 `GET /health` 不调用模型。`VEHICLE_AGENT_MODEL_BACKEND=openai` 时，`/models` 不可用是 `503` 和 `unavailable`，返回 200 后才是 `ok`。`VEHICLE_AGENT_INGEST=kafka` 时，尚未分到分区仍是 `503` 和 `starting`，此时不访问模型；分到之后才按模型后端决定是 `ok` 还是 `unavailable`。
 
 ```powershell
 docker compose -f deployments/docker-compose.yml up -d api

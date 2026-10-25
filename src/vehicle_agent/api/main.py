@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
+import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from langgraph.types import Command
@@ -129,11 +130,16 @@ def create_app(
     app.state.tools = tools
     app.state.mcp_session = mcp_session
     app.state.ingest_ready = ingest_ready
+    app.state.model_probe_client = None
 
     @app.get("/health", response_model=None)
     def health() -> JSONResponse:
         if settings.ingest == "kafka" and not ingest_ready.is_set():
             return JSONResponse({"status": "starting"}, status_code=503)
+        if settings.model_backend == "openai" and not _text_model_ready(
+            settings, app.state.model_probe_client
+        ):
+            return JSONResponse({"status": "unavailable"}, status_code=503)
         return JSONResponse({"status": "ok"})
 
     @app.exception_handler(HTTPException)
@@ -258,6 +264,25 @@ def build_default_app() -> FastAPI:
         graph_index=index,
         regulation_index=regulations,
     )
+
+
+def _text_model_ready(settings: Settings, client: httpx.Client | None = None) -> bool:
+    """GET /models. A non-200 response or a transport error means the model is down."""
+
+    owns_client = client is None
+    http = client or httpx.Client(
+        base_url=settings.model_base_url.rstrip("/") + "/",
+        headers={"Authorization": f"Bearer {settings.model_api_key}"},
+        timeout=2,
+    )
+    try:
+        response = http.get("models")
+        return response.status_code == 200
+    except httpx.HTTPError:
+        return False
+    finally:
+        if owns_client:
+            http.close()
 
 
 def open_model(settings: Settings) -> ModelAdapter:
