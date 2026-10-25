@@ -34,6 +34,18 @@ INGEST_COMPOSE = [
 HEALTH_URL = "http://127.0.0.1:8000/health"
 JUDGEMENT_URL = "http://127.0.0.1:8000/api/v1/judgements"
 INGEST_EVENT_ID = "evt_20261009_000001"
+MODEL_COMPOSE = [
+    "docker",
+    "compose",
+    "-p",
+    "vehicle-agent-model",
+    "-f",
+    str(ROOT / "deployments" / "docker-compose.yml"),
+    "-f",
+    str(ROOT / "deployments" / "docker-compose.ingest.yml"),
+    "-f",
+    str(ROOT / "deployments" / "docker-compose.model.yml"),
+]
 INGEST_WORKORDER_URL = (
     "http://127.0.0.1:8000/api/v1/workorders/wo-evt_20261009_000001"
 )
@@ -84,6 +96,38 @@ def test_compose_ingest_judges_one_alarm_and_keeps_the_workorder() -> None:
     assert order["status"] == "open"
     assert restarted["result"]["risk_score"] == 0.95
     assert restarted_order["status"] == "open"
+
+
+@pytest.mark.skipif(
+    os.environ.get("VEHICLE_AGENT_RUN_MODEL") != "1",
+    reason="设置 VEHICLE_AGENT_RUN_MODEL=1 后连接宿主机上的 OpenAI 兼容接口",
+)
+def test_compose_online_model_keeps_the_score() -> None:
+    from vehicle_agent.harness.model import FIXTURE_REPORT
+    from vehicle_agent.ingest import fatigue_alarm_event
+    from vehicle_agent.kafka_alarm import exchange_vehicle_alarm
+
+    fixture_summary = json.loads(FIXTURE_REPORT)["summary"]
+    subprocess.run([*MODEL_COMPOSE, "down", "-v"], cwd=ROOT, check=True)
+    try:
+        subprocess.run(
+            [*MODEL_COMPOSE, "up", "-d", "--build", "kafka", "api"],
+            cwd=ROOT,
+            check=True,
+        )
+        _wait_until_healthy()
+        payloads = exchange_vehicle_alarm(fatigue_alarm_event())
+        assert len(payloads) == 2
+        viewed = _wait_for_ingested_judgement()
+        order = _get_json(INGEST_WORKORDER_URL)
+    finally:
+        subprocess.run([*MODEL_COMPOSE, "down", "-v"], cwd=ROOT, check=False)
+
+    assert viewed["status"] == "completed"
+    assert viewed["result"]["risk_score"] == 0.95
+    assert viewed["result"]["summary"] != fixture_summary
+    assert order["workorder_id"] == "wo-evt_20261009_000001"
+    assert order["status"] == "open"
 
 
 def _wait_until_healthy() -> None:

@@ -19,7 +19,7 @@ isProject: false
 
 # 38 Kafka 接入容器
 
-上一阶段是已完成的研判冒烟，见 [.cursor/plans/37-smoke-judgement.plan.md](.cursor/plans/37-smoke-judgement.plan.md)。本文件是阶段 38，落地到 [.cursor/plans/38-kafka-compose-ingest.plan.md](.cursor/plans/38-kafka-compose-ingest.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 28 节第 2 条和第 12 条。在线模型切换、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes、CI 和前端仍不纳入。
+上一阶段是已完成的研判冒烟，见 [.cursor/plans/37-smoke-judgement.plan.md](.cursor/plans/37-smoke-judgement.plan.md)。本文件是阶段 38，落地到 [.cursor/plans/38-kafka-compose-ingest.plan.md](.cursor/plans/38-kafka-compose-ingest.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/39-online-model.plan.md](.cursor/plans/39-online-model.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 28 节第 2 条和第 12 条。在线模型切换、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes、CI 和前端仍不纳入。
 
 本阶段只证明一件事：加上接入文件后，`kafka` 和 `api` 一起起来，容器自己消费 `vehicle.alarm`。`fatigue_alarm_event()` 发布两次，只得到一次研判，`risk_score` 是 `0.95`，`task_id` 是 `evt_20261009_000001`。重启 `api` 后，卷里的 `wo-evt_20261009_000001` 仍是 `open`。图、分数、建单规则和工具数不变。`prompt_version` 仍是 `report-v6`。模型仍是 `fixture`。不新增 HTTP 路径。
 

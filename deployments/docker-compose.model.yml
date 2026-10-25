@@ -1,0 +1,12 @@
+# 叠在基础文件上，让 api 调用宿主机上的 OpenAI 兼容接口。不启动模型容器。
+# 常驻消费时再叠 deployments/docker-compose.ingest.yml。
+# lite 的 `up -d api` 不使用本文件，模型仍是 fixture。
+services:
+  api:
+    environment:
+      VEHICLE_AGENT_MODEL_BACKEND: openai
+      VEHICLE_AGENT_MODEL_BASE_URL: ${VEHICLE_AGENT_MODEL_BASE_URL:-http://host.docker.internal:8001/v1}
+      VEHICLE_AGENT_MODEL_API_KEY: ${VEHICLE_AGENT_MODEL_API_KEY:-local}
+      VEHICLE_AGENT_MODEL_NAME: ${VEHICLE_AGENT_MODEL_NAME:-qwen}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

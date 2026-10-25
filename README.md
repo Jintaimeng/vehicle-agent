@@ -67,7 +67,13 @@ lite 容器用 `docker compose -f deployments/docker-compose.yml up -d api` 启�
 docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.ingest.yml up -d kafka api
 ```
 
-本阶段不包含在线模型切换、驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes、CI 和前端。
+要让这个容器改用在线模型，再叠 `deployments/docker-compose.model.yml`。它把 `VEHICLE_AGENT_MODEL_BACKEND` 设为 `openai`，默认请求 `http://host.docker.internal:8001/v1`，不启动模型容器。这条定样本的风险分仍是 `0.95`，总结不再是固定句。不叠这份文件时，模型仍是 `fixture`。
+
+```powershell
+docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.ingest.yml -f deployments/docker-compose.model.yml up -d kafka api
+```
+
+本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes、CI 和前端。
 
 ## 环境
 
@@ -107,7 +113,7 @@ D:\uv_venv\Scripts\python.exe -m vehicle_agent.api.main
 docker compose -f deployments/docker-compose.yml up -d api
 ```
 
-容器验收同时覆盖 lite 和接入文件。接入那条会用项目名 `vehicle-agent-ingest` 启动 `kafka` 和 `api`，发布定样本两次，风险分是 `0.95`，重启后工单仍是 `open`：
+容器验收同时覆盖 lite 和接入文件。接入那条会用项目名 `vehicle-agent-ingest` 启动 `kafka` 和 `api`，发布定样本两次，风险分是 `0.95`，重启后工单仍是 `open`。在线模型那条还要 `VEHICLE_AGENT_RUN_MODEL=1`，并已有对话接口；未设置时跳过，不启动模型容器：
 
 ```powershell
 $env:VEHICLE_AGENT_RUN_COMPOSE="1"
