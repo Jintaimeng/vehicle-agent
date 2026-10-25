@@ -222,6 +222,19 @@ $env:VEHICLE_AGENT_VLM_IMAGE="data/vision-sample.jpg"
 D:\uv_venv\Scripts\python.exe -m pytest tests/test_vlm_acceptance.py
 ```
 
+要在现有研判里同时走官方预训练 YOLO 和视觉大模型，两个开关都要打开。样图必须是含有人或手机的 JPEG，不能用定样本标签。未设置 `VEHICLE_AGENT_YOLO_WEIGHTS` 时使用官方 `yolov8n.pt`，首次加载由 ultralytics 下载。文本总结和画面复核可以共用一个兼容接口。纯色图或接口不可用时这条验收失败。默认测试不跑它。
+
+```powershell
+$env:VEHICLE_AGENT_RUN_YOLO="1"
+$env:VEHICLE_AGENT_RUN_VLM="1"
+$env:VEHICLE_AGENT_VLM_BASE_URL="http://127.0.0.1:8001/v1"
+$env:VEHICLE_AGENT_VLM_MODEL_NAME="qwen-vl"
+$env:VEHICLE_AGENT_MODEL_BASE_URL="http://127.0.0.1:8001/v1"
+$env:VEHICLE_AGENT_MODEL_NAME="qwen-vl"
+$env:VEHICLE_AGENT_YOLO_IMAGE="data/vision-sample.jpg"
+D:\uv_venv\Scripts\python.exe -m pytest tests/test_live_vision_judgement.py
+```
+
 需要 FFmpeg 抽帧验收时，准备本机 `ffmpeg` 和一条本地短视频。验收检查 JPEG 和时间戳间隔，并交给现有聚合。默认测试不调用它。研判里启用抽帧要另设 `VEHICLE_AGENT_VIDEO_BACKEND=ffmpeg`。
 
 ```powershell
