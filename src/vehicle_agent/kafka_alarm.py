@@ -88,6 +88,18 @@ def _ensure_topic(bootstrap: str, topic: str) -> None:
             raise
 
 
+def produce_judgement_completed(bootstrap: str, topic: str, payload: bytes) -> None:
+    """Publish one judgement.completed record. A stuck flush raises TimeoutError."""
+
+    from confluent_kafka import Producer
+
+    _ensure_topic(bootstrap, topic)
+    producer = Producer({"bootstrap.servers": bootstrap})
+    producer.produce(topic, value=payload)
+    if producer.flush(10):
+        raise TimeoutError("kafka publish timed out")
+
+
 def serve_vehicle_alarms(
     bootstrap: str,
     handle: Callable[[bytes], None],

@@ -4,13 +4,19 @@ from datetime import UTC, datetime
 
 import pytest
 
-from test_graph import _run
+from test_graph import REPORT, _run, _settings
 from vehicle_agent.api.main import (
     _serve_alarm_ingest,
     handle_alarm_payload,
     ingest_alarm_payload,
 )
 from vehicle_agent.config import Settings
+from vehicle_agent.graph.builder import build_graph
+from vehicle_agent.graph.checkpoint import open_checkpointer
+from vehicle_agent.harness.model import FakeModelAdapter
+from vehicle_agent.harness.policy import AllowApprovedWritesPolicy
+from vehicle_agent.harness.runtime import Harness
+from vehicle_agent.harness.tools import build_vehicle_tools
 from vehicle_agent.ingest import (
     MemoryAlarmTopic,
     MemoryDeviceStatusTopic,
@@ -111,6 +117,82 @@ def test_device_status_is_not_consumed() -> None:
     assert MemoryDeviceStatusTopic().name == "device.status"
 
 
+def test_completed_event_publishes_once(tmp_path) -> None:
+    sent: list[tuple[str, bytes]] = []
+
+    def send(topic: str, payload: bytes) -> None:
+        sent.append((topic, payload))
+
+    event = fatigue_alarm_event()
+    alarm = MemoryAlarmTopic().deliver(event)
+    ready, _values = _run(tmp_path, alarm, task_id=event.event_id)
+    payload = alarm_event_payload(event)
+    task_id = ingest_alarm_payload(payload, ready, MemoryAlarmTopic(), {}, send)
+
+    assert task_id == _EVENT_ID
+    assert sent == []
+
+    graph = _idle_graph(tmp_path / "fresh")
+    judged: dict[str, str] = {}
+    ingest_alarm_payload(payload, graph, MemoryAlarmTopic(), judged, send)
+    ingest_alarm_payload(payload, graph, MemoryAlarmTopic(), judged, send)
+
+    assert len(sent) == 1
+    topic, body = sent[0]
+    assert topic == "judgement.completed"
+    assert json.loads(body) == {
+        "event_id": _EVENT_ID,
+        "task_id": _EVENT_ID,
+        "risk_score": 0.95,
+        "requires_human_review": False,
+        "workorder_id": f"wo-{_EVENT_ID}",
+        "schema_version": "1.0",
+    }
+    invalid: list[tuple[str, bytes]] = []
+    assert (
+        handle_alarm_payload(
+            b"not-json",
+            graph,
+            MemoryAlarmTopic(),
+            {},
+            lambda completed_topic, completed: invalid.append((completed_topic, completed)),
+        )
+        is None
+    )
+    assert invalid == []
+
+
+def test_ingest_thread_publishes_one_completion(tmp_path, monkeypatch) -> None:
+    graph = _idle_graph(tmp_path / "thread")
+    produced: list[tuple[str, str, bytes]] = []
+    payload = alarm_event_payload(fatigue_alarm_event())
+
+    def serve(_bootstrap: str, handle, _stop, on_ready=None) -> None:
+        del on_ready
+        handle(payload)
+        handle(payload)
+
+    def produce(bootstrap: str, topic: str, body: bytes) -> None:
+        produced.append((bootstrap, topic, body))
+
+    monkeypatch.setattr("vehicle_agent.kafka_alarm.serve_vehicle_alarms", serve)
+    monkeypatch.setattr("vehicle_agent.kafka_alarm.produce_judgement_completed", produce)
+    _serve_alarm_ingest("kafka:29092", graph, threading.Event(), threading.Event())
+
+    assert len(produced) == 1
+    bootstrap, topic, body = produced[0]
+    assert bootstrap == "kafka:29092"
+    assert topic == "judgement.completed"
+    assert json.loads(body) == {
+        "event_id": _EVENT_ID,
+        "task_id": _EVENT_ID,
+        "risk_score": 0.95,
+        "requires_human_review": False,
+        "workorder_id": f"wo-{_EVENT_ID}",
+        "schema_version": "1.0",
+    }
+
+
 def test_existing_checkpoint_skips_a_second_invoke(tmp_path) -> None:
     event = fatigue_alarm_event()
     alarm = MemoryAlarmTopic().deliver(event)
@@ -156,6 +238,18 @@ def test_ingest_defaults_stay_off() -> None:
 
     assert settings.ingest == "off"
     assert settings.kafka_bootstrap == "127.0.0.1:9092"
+
+
+def _idle_graph(directory):
+    directory.mkdir()
+    runtime = _settings(checkpoint_path=str(directory / "checkpoints.sqlite"))
+    harness = Harness(
+        runtime,
+        FakeModelAdapter(REPORT),
+        build_vehicle_tools(build_seed_repository(), settings=runtime),
+        policy=AllowApprovedWritesPolicy(),
+    )
+    return build_graph(harness, open_checkpointer(directory / "checkpoints.sqlite"))
 
 
 def _tool_names(values: dict) -> list[str]:

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from vehicle_agent.domain.models import Alarm, Device
 
 _TOPIC = "vehicle.alarm"
+_COMPLETED_TOPIC = "judgement.completed"
 _STATUS_TOPIC = "device.status"
 
 
@@ -118,6 +119,39 @@ def publish_vehicle_alarm(event: AlarmEvent, send: Callable[[str, bytes], None])
     """Hand one vehicle.alarm payload to the caller-supplied sender."""
 
     send(_TOPIC, alarm_event_payload(event))
+
+
+class JudgementCompleted(BaseModel):
+    """One judgement.completed payload. A missing work order is null."""
+
+    event_id: str
+    task_id: str
+    risk_score: float
+    requires_human_review: bool
+    workorder_id: str | None = None
+    schema_version: Literal["1.0"] = "1.0"
+
+
+def judgement_completed_payload(event: JudgementCompleted) -> bytes:
+    """JSON for one finished judgement. workorder_id is null when absent."""
+
+    body = {
+        "event_id": event.event_id,
+        "task_id": event.task_id,
+        "risk_score": event.risk_score,
+        "requires_human_review": event.requires_human_review,
+        "workorder_id": event.workorder_id,
+        "schema_version": event.schema_version,
+    }
+    return json.dumps(body, ensure_ascii=False).encode("utf-8")
+
+
+def publish_judgement_completed(
+    event: JudgementCompleted, send: Callable[[str, bytes], None]
+) -> None:
+    """Hand one judgement.completed payload to the caller-supplied sender."""
+
+    send(_COMPLETED_TOPIC, judgement_completed_payload(event))
 
 
 class MemoryAlarmTopic:

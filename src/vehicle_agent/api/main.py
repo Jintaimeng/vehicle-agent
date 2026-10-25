@@ -23,7 +23,13 @@ from vehicle_agent.harness.model import (
 )
 from vehicle_agent.harness.policy import AllowApprovedWritesPolicy
 from vehicle_agent.harness.runtime import Harness
-from vehicle_agent.ingest import MemoryAlarmTopic, alarm_event_from_payload, consume_vehicle_alarms
+from vehicle_agent.ingest import (
+    JudgementCompleted,
+    MemoryAlarmTopic,
+    alarm_event_from_payload,
+    consume_vehicle_alarms,
+    publish_judgement_completed,
+)
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
 from vehicle_agent.knowledge.index import QdrantRegulationIndex, open_regulation_index
 from vehicle_agent.knowledge.video import open_video_timeline
@@ -336,12 +342,25 @@ def _config(task_id: str) -> dict:
     return {"configurable": {"thread_id": task_id}}
 
 
-def judge_consumed_alarm(graph, alarm: Alarm, event_id: str) -> str:
+def judge_consumed_alarm(graph, alarm: Alarm, event_id: str, send=None) -> str:
     """Invoke the current graph once. An existing checkpoint for this event is kept."""
 
     if graph.get_state(_config(event_id)).values:
         return event_id
     graph.invoke(_initial_state(event_id, alarm), _config(event_id))
+    if send is not None:
+        values = graph.get_state(_config(event_id)).values
+        result = values["result"]
+        publish_judgement_completed(
+            JudgementCompleted(
+                event_id=event_id,
+                task_id=values["task_id"],
+                risk_score=result["risk_score"],
+                requires_human_review=result["requires_human_review"],
+                workorder_id=values.get("workorder_id"),
+            ),
+            send,
+        )
     return event_id
 
 
@@ -350,13 +369,14 @@ def ingest_alarm_payload(
     graph,
     topic: MemoryAlarmTopic,
     judged: dict[str, str],
+    send=None,
 ) -> str:
     """Parse one vehicle.alarm record and judge it unless that event was already seen."""
 
     event = alarm_event_from_payload(payload)
 
     def judge(alarm: Alarm) -> str:
-        return judge_consumed_alarm(graph, alarm, event.event_id)
+        return judge_consumed_alarm(graph, alarm, event.event_id, send)
 
     return consume_vehicle_alarms([payload], judge, topic, judged)
 
@@ -366,11 +386,12 @@ def handle_alarm_payload(
     graph,
     topic: MemoryAlarmTopic,
     judged: dict[str, str],
+    send=None,
 ) -> str | None:
     """Skip a bad record. The caller still commits the offset."""
 
     try:
-        return ingest_alarm_payload(payload, graph, topic, judged)
+        return ingest_alarm_payload(payload, graph, topic, judged, send)
     except ValueError:
         return None
 
@@ -386,13 +407,16 @@ def _serve_alarm_ingest(
 ) -> None:
     """Keep polling vehicle.alarm. A broker that is not up yet is tried again."""
 
-    from vehicle_agent.kafka_alarm import serve_vehicle_alarms
+    from vehicle_agent.kafka_alarm import produce_judgement_completed, serve_vehicle_alarms
 
     topic = MemoryAlarmTopic()
     judged: dict[str, str] = {}
 
+    def send(completed_topic: str, payload: bytes) -> None:
+        produce_judgement_completed(bootstrap, completed_topic, payload)
+
     def handle(payload: bytes) -> None:
-        handle_alarm_payload(payload, graph, topic, judged)
+        handle_alarm_payload(payload, graph, topic, judged, send)
 
     while not stop.is_set():
         ready.clear()
