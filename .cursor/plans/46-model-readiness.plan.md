@@ -13,7 +13,7 @@ isProject: false
 
 # 46 模型就绪检查
 
-上一阶段是已完成的流水线镜像构建，见 [.cursor/plans/45-ci-image-build.plan.md](.cursor/plans/45-ci-image-build.plan.md)。本文件是阶段 46，落地到 [.cursor/plans/46-model-readiness.plan.md](.cursor/plans/46-model-readiness.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。API 鉴权、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes 和前端仍不纳入。不改 Kafka 广告地址，不改 Dockerfile。
+上一阶段是已完成的流水线镜像构建，见 [.cursor/plans/45-ci-image-build.plan.md](.cursor/plans/45-ci-image-build.plan.md)。本文件是阶段 46，落地到 [.cursor/plans/46-model-readiness.plan.md](.cursor/plans/46-model-readiness.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/47-api-auth.plan.md](.cursor/plans/47-api-auth.plan.md)。API 鉴权、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes 和前端仍不纳入。不改 Kafka 广告地址，不改 Dockerfile。
 
 本阶段只证明一件事：`model_backend=openai` 时，`GET /health` 会请求 `VEHICLE_AGENT_MODEL_BASE_URL` 下的 `/models`。连不上、超时或状态码不是 200，返回 `503` 和 `{"status":"unavailable"}`；返回 200 时，健康检查才是 `200` 和 `{"status":"ok"}`。`model_backend=fixture` 时不发出任何模型请求，响应与现在相同。图、分数、建单规则和工具数不变。`prompt_version` 仍是 `report-v6`。不新增 HTTP 路径。高速无图样例的 `risk_score` 仍是 `1.0`。定样本在 `fixture` 下仍是 `0.95`。
 

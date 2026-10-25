@@ -75,7 +75,7 @@ docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.i
 
 推送和拉取请求会在 runner 的临时环境里安装 `.[dev]`，然后执行 `uv run ruff check src tests scripts` 和 `uv run pytest`。通过后用 `deployments/Dockerfile` 构建 `vehicle-agent:ci`，并确认镜像里没有 `ultralytics`、`VEHICLE_AGENT_MODEL_BACKEND` 是 `fixture`。镜像不推送。不设置实机验收开关，因此不连接 Kafka、Compose、Neo4j、Qdrant 或在线模型。
 
-本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、API 鉴权、Kubernetes 和前端。
+本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes 和前端。
 
 ## 环境
 
@@ -102,6 +102,7 @@ D:\uv_venv\Scripts\python.exe scripts\demo.py
 - `VEHICLE_AGENT_MODEL_BASE_URL`，默认 `http://127.0.0.1:8001/v1`
 - `VEHICLE_AGENT_MODEL_API_KEY`，默认 `local`
 - `VEHICLE_AGENT_MODEL_NAME`，默认 `qwen`
+- `VEHICLE_AGENT_API_TOKEN`，默认空。为空时 `/api/v1` 不检查调用方。设为非空后，这些路径必须带 `Authorization: Bearer`，且与该值全等，否则是 `401` 和 `{"code":"unauthorized","message":"unauthorized"}`。`GET /health` 两种情况下都不检查。
 
 ```powershell
 D:\uv_venv\Scripts\python.exe -m vehicle_agent.api.main
@@ -109,7 +110,7 @@ D:\uv_venv\Scripts\python.exe -m vehicle_agent.api.main
 
 常驻消费 `vehicle.alarm` 时设置 `VEHICLE_AGENT_INGEST=kafka`。经纪人地址是 `VEHICLE_AGENT_KAFKA_BOOTSTRAP`，默认 `127.0.0.1:9092`。先启动 Kafka，再启动本进程。只启动 lite 容器时不设置这项。叠上 `deployments/docker-compose.ingest.yml` 时，容器内地址是 `kafka:29092`。未设置 `KAFKA_ADVERTISED_HOST` 时，对外广告仍是 `127.0.0.1:9092`。
 
-不需要在线模型时，用 lite 容器。它把 `VEHICLE_AGENT_MODEL_BACKEND` 设为 `fixture`，监听 `0.0.0.0:8000`，检查点写到卷里的 `/data/checkpoints.sqlite`。`model_backend=fixture` 时 `GET /health` 不调用模型。`VEHICLE_AGENT_MODEL_BACKEND=openai` 时，`/models` 不可用是 `503` 和 `unavailable`，返回 200 后才是 `ok`。`VEHICLE_AGENT_INGEST=kafka` 时，尚未分到分区仍是 `503` 和 `starting`，此时不访问模型；分到之后才按模型后端决定是 `ok` 还是 `unavailable`。
+不需要在线模型时，用 lite 容器。它把 `VEHICLE_AGENT_MODEL_BACKEND` 设为 `fixture`，监听 `0.0.0.0:8000`，检查点写到卷里的 `/data/checkpoints.sqlite`。未在宿主机设置 `VEHICLE_AGENT_API_TOKEN` 时，容器内仍是空字符串，`/api/v1` 不检查调用方。`model_backend=fixture` 时 `GET /health` 不调用模型。`VEHICLE_AGENT_MODEL_BACKEND=openai` 时，`/models` 不可用是 `503` 和 `unavailable`，返回 200 后才是 `ok`。`VEHICLE_AGENT_INGEST=kafka` 时，尚未分到分区仍是 `503` 和 `starting`，此时不访问模型；分到之后才按模型后端决定是 `ok` 还是 `unavailable`。
 
 ```powershell
 docker compose -f deployments/docker-compose.yml up -d api
@@ -122,22 +123,24 @@ $env:VEHICLE_AGENT_RUN_COMPOSE="1"
 D:\uv_venv\Scripts\python.exe -m pytest tests/test_compose_acceptance.py
 ```
 
+设置了 `VEHICLE_AGENT_API_TOKEN` 时，下面的请求要带 `Authorization: Bearer`，值与该密钥相同。未设置时可以不带这个头。
+
 创建研判：
 
 ```powershell
-curl http://127.0.0.1:8000/api/v1/judgements -H "Content-Type: application/json" -d "{\"id\":\"alarm_001\",\"vehicle_id\":\"vehicle_001\",\"driver_id\":\"driver_001\",\"device_id\":\"device_001\",\"alarm_type\":\"driver_fatigue\",\"alarm_time\":\"2026-10-09T10:30:00Z\",\"longitude\":113.26,\"latitude\":23.12,\"speed_kmh\":85,\"raw_confidence\":0.9}"
+curl http://127.0.0.1:8000/api/v1/judgements -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d "{\"id\":\"alarm_001\",\"vehicle_id\":\"vehicle_001\",\"driver_id\":\"driver_001\",\"device_id\":\"device_001\",\"alarm_type\":\"driver_fatigue\",\"alarm_time\":\"2026-10-09T10:30:00Z\",\"longitude\":113.26,\"latitude\":23.12,\"speed_kmh\":85,\"raw_confidence\":0.9}"
 ```
 
 查询任务：
 
 ```powershell
-curl http://127.0.0.1:8000/api/v1/judgements/<task_id>
+curl http://127.0.0.1:8000/api/v1/judgements/<task_id> -H "Authorization: Bearer <token>"
 ```
 
 证据不足时状态为 `awaiting_review`，提交人工复核：
 
 ```powershell
-curl http://127.0.0.1:8000/api/v1/judgements/<task_id>/review -H "Content-Type: application/json" -d "{\"reviewer\":\"ops\",\"decision\":\"confirm\",\"comment\":\"人工确认\"}"
+curl http://127.0.0.1:8000/api/v1/judgements/<task_id>/review -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d "{\"reviewer\":\"ops\",\"decision\":\"confirm\",\"comment\":\"人工确认\"}"
 ```
 
 ## Neo4j

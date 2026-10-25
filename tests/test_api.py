@@ -202,6 +202,70 @@ def test_missing_task_uses_error_body(tmp_path) -> None:
     assert response.json() == {"code": "not_found", "message": "task not found"}
 
 
+def test_api_token_gates_api_routes(tmp_path) -> None:
+    settings = Settings(
+        model_backend="fixture",
+        api_token="secret",
+        checkpoint_path=str(tmp_path / "checkpoints.sqlite"),
+        max_retries=1,
+    )
+    client = TestClient(
+        create_app(
+            settings,
+            build_seed_repository(),
+            open_model(settings),
+            open_checkpointer(settings.checkpoint_path),
+        )
+    )
+    alarm = _alarm(
+        id="alarm_demo",
+        vehicle_id="vehicle_001",
+        driver_id="driver_001",
+        device_id="device_001",
+        longitude=113.2644,
+        latitude=23.1291,
+        speed_kmh=85,
+        raw_confidence=0.9,
+    )
+    denied = {"code": "unauthorized", "message": "unauthorized"}
+
+    health = client.get("/health")
+    missing_header = client.post("/api/v1/judgements", json=alarm)
+    wrong = client.post(
+        "/api/v1/judgements",
+        json=alarm,
+        headers={"Authorization": "Bearer wrong"},
+    )
+    hidden = client.get("/api/v1/workorders/missing")
+    missing_order = client.get(
+        "/api/v1/workorders/missing",
+        headers={"Authorization": "Bearer secret"},
+    )
+    created = client.post(
+        "/api/v1/judgements",
+        json=alarm,
+        headers={"Authorization": "Bearer secret"},
+    )
+
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok"}
+    assert missing_header.status_code == 401
+    assert missing_header.json() == denied
+    assert wrong.status_code == 401
+    assert wrong.json() == denied
+    assert hidden.status_code == 401
+    assert hidden.json() == denied
+    assert missing_order.status_code == 404
+    assert missing_order.json() == {
+        "code": "not_found",
+        "message": "'workorder not found: missing'",
+    }
+    assert created.status_code == 200
+    body = created.json()
+    assert body["result"]["risk_score"] == 1.0
+    assert body["workorder_id"] == f"wo-{body['task_id']}"
+
+
 def test_health_does_not_call_the_model(tmp_path) -> None:
     client = _client(tmp_path, model_backend="fixture")
 

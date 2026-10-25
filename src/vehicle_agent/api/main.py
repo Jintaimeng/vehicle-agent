@@ -1,3 +1,4 @@
+import hmac
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -5,7 +6,7 @@ from typing import Annotated
 from uuid import uuid4
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from langgraph.types import Command
 from pydantic import BaseModel, Field
@@ -131,6 +132,18 @@ def create_app(
     app.state.mcp_session = mcp_session
     app.state.ingest_ready = ingest_ready
     app.state.model_probe_client = None
+
+    @app.middleware("http")
+    async def require_api_token(request: Request, call_next):
+        if settings.api_token and request.url.path.startswith("/api/"):
+            expected = f"Bearer {settings.api_token}"
+            provided = request.headers.get("authorization", "")
+            if not hmac.compare_digest(provided, expected):
+                return JSONResponse(
+                    {"code": "unauthorized", "message": "unauthorized"},
+                    status_code=401,
+                )
+        return await call_next(request)
 
     @app.get("/health", response_model=None)
     def health() -> JSONResponse:

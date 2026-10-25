@@ -47,6 +47,7 @@ services:
       VEHICLE_AGENT_MODEL_BACKEND: fixture
       VEHICLE_AGENT_HOST: 0.0.0.0
       VEHICLE_AGENT_CHECKPOINT_PATH: /data/checkpoints.sqlite
+      VEHICLE_AGENT_API_TOKEN: ${VEHICLE_AGENT_API_TOKEN:-}
     volumes:
       - api-data:/data
     healthcheck:

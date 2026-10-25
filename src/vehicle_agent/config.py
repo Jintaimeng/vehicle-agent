@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     model_base_url: str = "http://127.0.0.1:8001/v1"
     model_api_key: str = "local"
     model_name: str = "qwen"
+    api_token: str = ""
     host: str = "127.0.0.1"
     port: int = 8000
     prompt_version: str = "report-v6"
