@@ -17,3 +17,6 @@ jobs:
       - run: uv pip install -e ".[dev]"
       - run: uv run ruff check src tests scripts
       - run: uv run pytest
+      - run: docker build -f deployments/Dockerfile -t vehicle-agent:ci .
+      - run: |
+          docker run --rm --entrypoint python vehicle-agent:ci -c "import importlib.util, os, sys; sys.exit(0 if importlib.util.find_spec('ultralytics') is None and os.environ.get('VEHICLE_AGENT_MODEL_BACKEND') == 'fixture' else 1)"

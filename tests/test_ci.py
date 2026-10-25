@@ -23,5 +23,11 @@ def test_check_workflow_runs_the_default_commands_only() -> None:
     assert "0.9.5" in text
     for name in _LIVE_SWITCHES:
         assert name not in text
-    assert "docker build" not in text
+    assert "docker build -f deployments/Dockerfile -t vehicle-agent:ci ." in text
+    assert (
+        "docker run --rm --entrypoint python vehicle-agent:ci -c "
+        '"import importlib.util, os, sys; sys.exit(0 if importlib.util.find_spec(\'ultralytics\') '
+        "is None and os.environ.get('VEHICLE_AGENT_MODEL_BACKEND') == 'fixture' else 1)\""
+    ) in text
     assert "docker/build-push-action" not in text
+    assert ".[vision]" not in text
