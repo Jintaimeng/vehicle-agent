@@ -55,11 +55,13 @@ FastAPI
 
 研判工单写在检查点旁边的 `workorders.sqlite`。这条定样本重启后仍是 `wo-evt_20261009_000001`，状态是 `open`。同一个 `task_id` 再创建一次，返回原来的工单。运营报告的定样本工单仍在内存。lite 容器不用改启动命令。
 
+冒烟是 `pytest tests/test_smoke.py`。它在同一次 fixture 应用里检查 `GET /health`、这条定样本的 `0.95`，以及重启后仍为 `open` 的 `wo-evt_20261009_000001`。实机经纪人仍只在 `VEHICLE_AGENT_RUN_KAFKA=1` 时连接。
+
 `device.status` 可以编成这条心跳的 JSON 再交给现有收件箱；同一个 `event_id` 只留一条。默认测试用假发送器。实机与 `vehicle.alarm` 共用 `VEHICLE_AGENT_RUN_KAFKA=1` 和 `127.0.0.1:9092`。研判图和设备诊断都不消费它。
 
 lite 容器用 `docker compose -f deployments/docker-compose.yml up -d api` 启动。它使用定样本和固定模型输出，不启动 Neo4j、Qdrant、Kafka，也不调用在线模型。演示脚本那条车速 85、置信度 0.9 的报警风险分是 `1.0`。
 
-本阶段不包含在线模型切换、冒烟流水线、驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes 和前端。
+本阶段不包含在线模型切换、驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes、CI 和前端。
 
 ## 环境
 
@@ -212,6 +214,12 @@ D:\uv_venv\Scripts\python.exe -m pytest tests/test_vlm_acceptance.py
 $env:VEHICLE_AGENT_RUN_FFMPEG="1"
 $env:VEHICLE_AGENT_FFMPEG_VIDEO="data/vision-sample.mp4"
 D:\uv_venv\Scripts\python.exe -m pytest tests/test_ffmpeg_acceptance.py
+```
+
+## 冒烟
+
+```powershell
+D:\uv_venv\Scripts\python.exe -m pytest tests/test_smoke.py
 ```
 
 ## 检查

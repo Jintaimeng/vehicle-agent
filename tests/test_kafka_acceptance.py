@@ -65,3 +65,52 @@ def test_live_kafka_alarm_is_judged_once(tmp_path) -> None:
     assert len(payloads) == 2
     assert task_id == "evt_20261009_000001"
     assert scores == [0.95]
+
+
+def test_live_kafka_alarm_smoke_writes_one_workorder(tmp_path) -> None:
+    from fastapi.testclient import TestClient
+
+    from vehicle_agent.api.main import create_app, handle_alarm_payload, open_model
+    from vehicle_agent.config import Settings
+    from vehicle_agent.graph.checkpoint import open_checkpointer
+    from vehicle_agent.ingest import MemoryAlarmTopic, fatigue_alarm_event
+    from vehicle_agent.kafka_alarm import exchange_vehicle_alarm
+    from vehicle_agent.repositories.memory import build_seed_repository
+
+    event = fatigue_alarm_event()
+    payloads = exchange_vehicle_alarm(event)
+    checkpoint = tmp_path / "checkpoints.sqlite"
+    settings = Settings(
+        model_backend="fixture",
+        checkpoint_path=str(checkpoint),
+        max_retries=1,
+    )
+    app = create_app(
+        settings,
+        build_seed_repository(),
+        open_model(settings),
+        open_checkpointer(checkpoint),
+    )
+    graph = app.state.graph
+    invokes = {"count": 0}
+    original = graph.invoke
+
+    def invoke(*args, **kwargs):
+        invokes["count"] += 1
+        return original(*args, **kwargs)
+
+    graph.invoke = invoke
+    topic = MemoryAlarmTopic()
+    judged: dict[str, str] = {}
+    with TestClient(app) as client:
+        task_ids = [
+            handle_alarm_payload(payload, graph, topic, judged) for payload in payloads
+        ]
+        viewed = client.get(f"/api/v1/judgements/{event.event_id}")
+        order = client.get("/api/v1/workorders/wo-evt_20261009_000001")
+
+    assert task_ids == [event.event_id, event.event_id]
+    assert invokes["count"] == 1
+    assert viewed.json()["result"]["risk_score"] == 0.95
+    assert order.json()["workorder_id"] == "wo-evt_20261009_000001"
+    assert order.json()["status"] == "open"

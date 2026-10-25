@@ -16,7 +16,7 @@ isProject: false
 
 # 36 工单落盘
 
-上一阶段是已完成的报警消费研判，见 [.cursor/plans/35-kafka-alarm-ingest.plan.md](.cursor/plans/35-kafka-alarm-ingest.plan.md)。本文件是阶段 36，落地到 [.cursor/plans/36-workorder-sqlite.plan.md](.cursor/plans/36-workorder-sqlite.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 7.2 节里工单闭环可追溯。在线模型切换、冒烟流水线、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes、CI 和前端仍不纳入。
+上一阶段是已完成的报警消费研判，见 [.cursor/plans/35-kafka-alarm-ingest.plan.md](.cursor/plans/35-kafka-alarm-ingest.plan.md)。本文件是阶段 36，落地到 [.cursor/plans/36-workorder-sqlite.plan.md](.cursor/plans/36-workorder-sqlite.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/37-smoke-judgement.plan.md](.cursor/plans/37-smoke-judgement.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 7.2 节里工单闭环可追溯。在线模型切换、冒烟流水线、`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes、CI 和前端仍不纳入。
 
 本阶段只证明一件事：`fatigue_alarm_event()` 走现有研判图并建单后，关掉进程再打开同一个文件，`wo-evt_20261009_000001` 仍在，状态仍是 `open`。同一个 `task_id` 再创建一次，返回原来的工单。图仍是 `validate → context → history → retrieve → graph → vision → score → report/review`。模型只写总结，不改分数。不新增工具，不新增 HTTP 路径。工具数仍是十一个。`prompt_version` 仍是 `report-v6`。风险分仍是 `0.95`。默认测试不连接 Kafka。
 
