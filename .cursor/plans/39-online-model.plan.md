@@ -19,7 +19,7 @@ isProject: false
 
 # 39 在线模型切换
 
-上一阶段是已完成的 Kafka 接入容器，见 [.cursor/plans/38-kafka-compose-ingest.plan.md](.cursor/plans/38-kafka-compose-ingest.plan.md)。本文件是阶段 39，落地到 [.cursor/plans/39-online-model.plan.md](.cursor/plans/39-online-model.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 27.1 节：开发阶段可切换远程模型。`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes、CI 和前端仍不纳入。不在本阶段部署 vLLM 或其它模型容器。
+上一阶段是已完成的 Kafka 接入容器，见 [.cursor/plans/38-kafka-compose-ingest.plan.md](.cursor/plans/38-kafka-compose-ingest.plan.md)。本文件是阶段 39，落地到 [.cursor/plans/39-online-model.plan.md](.cursor/plans/39-online-model.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/40-ci-check.plan.md](.cursor/plans/40-ci-check.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 27.1 节：开发阶段可切换远程模型。`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes、CI 和前端仍不纳入。不在本阶段部署 vLLM 或其它模型容器。
 
 本阶段只证明一件事：`model_backend=openai` 时，现有疲劳研判仍把 `fatigue_alarm_event()` 打成风险分 `0.95`，总结来自 `chat/completions`，不是 [FIXTURE_REPORT](src/vehicle_agent/harness/model.py) 那句固定文案。图、分数、建单规则和工具数不变。`prompt_version` 仍是 `report-v6`。不新增 HTTP 路径。不改 [open_model](src/vehicle_agent/api/main.py) 的分支：`fixture` 仍返回固定总结，`openai` 仍使用 [OpenAICompatibleModel](src/vehicle_agent/harness/model.py)。报告节点已经从状态抄 `risk_score`，模型失败只让任务失败，不改分数。
 

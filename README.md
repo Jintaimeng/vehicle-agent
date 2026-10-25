@@ -73,7 +73,9 @@ docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.i
 docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.ingest.yml -f deployments/docker-compose.model.yml up -d kafka api
 ```
 
-本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes、CI 和前端。
+推送和拉取请求会在 runner 的临时环境里安装 `.[dev]`，然后执行 `uv run ruff check src tests scripts` 和 `uv run pytest`。不设置实机验收开关，因此不连接 Kafka、Compose、Neo4j、Qdrant 或在线模型，也不构建镜像。
+
+本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes 和前端。
 
 ## 环境
 
