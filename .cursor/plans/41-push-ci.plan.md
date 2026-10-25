@@ -13,7 +13,7 @@ isProject: false
 
 # 41 推送并确认 CI
 
-上一阶段是已完成的默认检查流水线，见 [.cursor/plans/40-ci-check.plan.md](.cursor/plans/40-ci-check.plan.md)。本文件是阶段 41，落地到 [.cursor/plans/41-push-ci.plan.md](.cursor/plans/41-push-ci.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。健康检查仍只表示进程在，不表示已连接 Kafka。经纪人对外地址仍是 `127.0.0.1:9092`。`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes 和前端仍不纳入。
+上一阶段是已完成的默认检查流水线，见 [.cursor/plans/40-ci-check.plan.md](.cursor/plans/40-ci-check.plan.md)。本文件是阶段 41，落地到 [.cursor/plans/41-push-ci.plan.md](.cursor/plans/41-push-ci.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/42-ingest-health.plan.md](.cursor/plans/42-ingest-health.plan.md)。健康检查仍只表示进程在，不表示已连接 Kafka。经纪人对外地址仍是 `127.0.0.1:9092`。`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes 和前端仍不纳入。
 
 本阶段只证明一件事：`origin/master` 含有 `6ce3e36`，并且 [.github/workflows/check.yml](.github/workflows/check.yml) 在这次推送上跑完。不改应用代码、测试、Compose 和 README。不强制推送。
 

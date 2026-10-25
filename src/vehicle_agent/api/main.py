@@ -90,6 +90,7 @@ def create_app(
     tools, mcp_session = open_registered_tools(
         settings, repository, regulations, index, vision, timeline, workorders=orders
     )
+    ingest_ready = threading.Event()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -98,7 +99,7 @@ def create_app(
         if settings.ingest == "kafka":
             worker = threading.Thread(
                 target=_serve_alarm_ingest,
-                args=(settings.kafka_bootstrap, graph, stop),
+                args=(settings.kafka_bootstrap, graph, stop, ingest_ready),
                 name="vehicle-alarm-ingest",
                 daemon=True,
             )
@@ -127,10 +128,13 @@ def create_app(
     app.state.regulation_index = regulations
     app.state.tools = tools
     app.state.mcp_session = mcp_session
+    app.state.ingest_ready = ingest_ready
 
-    @app.get("/health")
-    def health() -> dict[str, str]:
-        return {"status": "ok"}
+    @app.get("/health", response_model=None)
+    def health() -> JSONResponse:
+        if settings.ingest == "kafka" and not ingest_ready.is_set():
+            return JSONResponse({"status": "starting"}, status_code=503)
+        return JSONResponse({"status": "ok"})
 
     @app.exception_handler(HTTPException)
     async def http_error(_request, exc: HTTPException) -> JSONResponse:
@@ -336,7 +340,12 @@ def handle_alarm_payload(
 _INGEST_RETRY_SECONDS = 1.0
 
 
-def _serve_alarm_ingest(bootstrap: str, graph, stop: threading.Event) -> None:
+def _serve_alarm_ingest(
+    bootstrap: str,
+    graph,
+    stop: threading.Event,
+    ready: threading.Event,
+) -> None:
     """Keep polling vehicle.alarm. A broker that is not up yet is tried again."""
 
     from vehicle_agent.kafka_alarm import serve_vehicle_alarms
@@ -348,9 +357,11 @@ def _serve_alarm_ingest(bootstrap: str, graph, stop: threading.Event) -> None:
         handle_alarm_payload(payload, graph, topic, judged)
 
     while not stop.is_set():
+        ready.clear()
         try:
-            serve_vehicle_alarms(bootstrap, handle, stop.is_set)
+            serve_vehicle_alarms(bootstrap, handle, stop.is_set, on_ready=ready.set)
         except Exception:
+            ready.clear()
             if stop.wait(_INGEST_RETRY_SECONDS):
                 return
             continue

@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
@@ -206,6 +208,28 @@ def test_health_does_not_call_the_model(tmp_path) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_kafka_health_stays_starting_until_the_consumer_is_ready(tmp_path, monkeypatch) -> None:
+    entered = threading.Event()
+
+    def serve(_bootstrap, _handle, stop, on_ready=None) -> None:
+        del on_ready
+        entered.set()
+        while not stop():
+            time.sleep(0.01)
+
+    monkeypatch.setattr("vehicle_agent.kafka_alarm.serve_vehicle_alarms", serve)
+    with _client(tmp_path, ingest="kafka") as client:
+        assert entered.wait(2)
+        starting = client.get("/health")
+        client.app.state.ingest_ready.set()
+        ready = client.get("/health")
+
+    assert starting.status_code == 503
+    assert starting.json() == {"status": "starting"}
+    assert ready.status_code == 200
+    assert ready.json() == {"status": "ok"}
 
 
 def test_fixture_backend_scores_demo_alarm(tmp_path) -> None:

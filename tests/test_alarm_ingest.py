@@ -131,10 +131,13 @@ def test_existing_checkpoint_skips_a_second_invoke(tmp_path) -> None:
 
 
 def test_alarm_ingest_retries_until_the_broker_accepts(monkeypatch) -> None:
-    calls: list[str] = []
+    calls: list[tuple[str, bool]] = []
+    ready = threading.Event()
 
-    def serve(bootstrap: str, _handle, _stop) -> None:
-        calls.append(bootstrap)
+    def serve(bootstrap: str, _handle, _stop, on_ready=None) -> None:
+        calls.append((bootstrap, ready.is_set()))
+        if on_ready is not None:
+            on_ready()
         if len(calls) == 1:
             raise OSError("broker down")
 
@@ -142,9 +145,10 @@ def test_alarm_ingest_retries_until_the_broker_accepts(monkeypatch) -> None:
     monkeypatch.setattr("vehicle_agent.api.main._INGEST_RETRY_SECONDS", 0)
     stop = threading.Event()
 
-    _serve_alarm_ingest("kafka:29092", object(), stop)
+    _serve_alarm_ingest("kafka:29092", object(), stop, ready)
 
-    assert calls == ["kafka:29092", "kafka:29092"]
+    assert calls == [("kafka:29092", False), ("kafka:29092", False)]
+    assert ready.is_set()
 
 
 def test_ingest_defaults_stay_off() -> None:

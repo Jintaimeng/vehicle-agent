@@ -88,7 +88,12 @@ def _ensure_topic(bootstrap: str, topic: str) -> None:
             raise
 
 
-def serve_vehicle_alarms(bootstrap: str, handle: Callable[[bytes], None], stop) -> None:
+def serve_vehicle_alarms(
+    bootstrap: str,
+    handle: Callable[[bytes], None],
+    stop,
+    on_ready: Callable[[], None] | None = None,
+) -> None:
     """Poll vehicle.alarm until stop() is true. Commit only after handle returns."""
 
     from confluent_kafka import Consumer
@@ -106,6 +111,8 @@ def serve_vehicle_alarms(bootstrap: str, handle: Callable[[bytes], None], stop) 
     try:
         while not stop():
             message = consumer.poll(0.5)
+            if on_ready is not None and consumer.assignment():
+                on_ready()
             if message is None or message.error() is not None:
                 continue
             if message.topic() != _ALARM_TOPIC:
