@@ -1,7 +1,8 @@
-"""Live topic publish and read. Import only from the Kafka acceptance test."""
+"""Live topic publish and read. Import from the Kafka acceptance test or the ingest thread."""
 
 import time
 import uuid
+from collections.abc import Callable
 
 from vehicle_agent.ingest import (
     AlarmEvent,
@@ -85,6 +86,38 @@ def _ensure_topic(bootstrap: str, topic: str) -> None:
     except KafkaException as exc:
         if exc.args[0].code() != KafkaError.TOPIC_ALREADY_EXISTS:
             raise
+
+
+def serve_vehicle_alarms(bootstrap: str, handle: Callable[[bytes], None], stop) -> None:
+    """Poll vehicle.alarm until stop() is true. Commit only after handle returns."""
+
+    from confluent_kafka import Consumer
+
+    _ensure_topic(bootstrap, _ALARM_TOPIC)
+    consumer = Consumer(
+        {
+            "bootstrap.servers": bootstrap,
+            "group.id": "vehicle-agent-alarm",
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": False,
+        }
+    )
+    consumer.subscribe([_ALARM_TOPIC])
+    try:
+        while not stop():
+            message = consumer.poll(0.5)
+            if message is None or message.error() is not None:
+                continue
+            if message.topic() != _ALARM_TOPIC:
+                continue
+            payload = message.value()
+            if payload is None:
+                consumer.commit(message=message, asynchronous=False)
+                continue
+            handle(payload)
+            consumer.commit(message=message, asynchronous=False)
+    finally:
+        consumer.close()
 
 
 def _assigned(consumer, deadline: float) -> list:

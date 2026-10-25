@@ -252,3 +252,5 @@ def test_local_process_defaults_stay_on_openai() -> None:
     assert settings.model_backend == "openai"
     assert settings.host == "127.0.0.1"
     assert settings.port == 8000
+    assert settings.ingest == "off"
+    assert settings.kafka_bootstrap == "127.0.0.1:9092"

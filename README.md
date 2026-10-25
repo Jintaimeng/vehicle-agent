@@ -51,13 +51,13 @@ FastAPI
 
 `video_backend=ffmpeg` 时，已保存文件、`rtsp://` 和 `jt1078://013800138000/1` 走同一个抽帧入口。这条 JT1078 只映射到 `rtsp://camera/live`，不解析码流。默认定样本时间轴不变。研判图仍调用 `analyze_video`，风险分规则不变。
 
-`vehicle.alarm` 可以编成第 12.2 节的 JSON，再进入现有疲劳研判图。这条定样本的风险分是 `0.95`，没有图片和视频，所以不跑视觉。同一个 `event_id` 不改第一次的车速。默认测试用假发送器。实机经纪人只在 `VEHICLE_AGENT_RUN_KAFKA=1` 时连接 `127.0.0.1:9092`。研判图不读取 `device.status`。
+`VEHICLE_AGENT_INGEST=kafka` 时，进程常驻消费 `vehicle.alarm`。这条定样本的风险分是 `0.95`，没有图片和视频，所以不跑视觉，`task_id` 是 `evt_20261009_000001`。同一个 `event_id` 不再研判第二次，车速仍是 `82.5`。默认 `VEHICLE_AGENT_INGEST=off`，不连接经纪人。默认测试用假发送器。实机经纪人只在 `VEHICLE_AGENT_RUN_KAFKA=1` 时连接 `127.0.0.1:9092`。`device.status` 仍不消费。
 
 `device.status` 可以编成这条心跳的 JSON 再交给现有收件箱；同一个 `event_id` 只留一条。默认测试用假发送器。实机与 `vehicle.alarm` 共用 `VEHICLE_AGENT_RUN_KAFKA=1` 和 `127.0.0.1:9092`。研判图和设备诊断都不消费它。
 
 lite 容器用 `docker compose -f deployments/docker-compose.yml up -d api` 启动。它使用定样本和固定模型输出，不启动 Neo4j、Qdrant、Kafka，也不调用在线模型。演示脚本那条车速 85、置信度 0.9 的报警风险分是 `1.0`。
 
-本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes 和前端。
+本阶段不包含工单落盘、冒烟流水线、驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、Kubernetes 和前端。
 
 ## 环境
 
@@ -88,6 +88,8 @@ D:\uv_venv\Scripts\python.exe scripts\demo.py
 ```powershell
 D:\uv_venv\Scripts\python.exe -m vehicle_agent.api.main
 ```
+
+常驻消费 `vehicle.alarm` 时设置 `VEHICLE_AGENT_INGEST=kafka`。经纪人地址是 `VEHICLE_AGENT_KAFKA_BOOTSTRAP`，默认 `127.0.0.1:9092`。先启动 Kafka，再启动本进程。lite 容器的 `api` 服务不设置这项。
 
 不需要在线模型时，用 lite 容器。它把 `VEHICLE_AGENT_MODEL_BACKEND` 设为 `fixture`，监听 `0.0.0.0:8000`，检查点写到卷里的 `/data/checkpoints.sqlite`。`GET /health` 只返回进程可用，不调用模型。
 

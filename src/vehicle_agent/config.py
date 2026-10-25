@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="VEHICLE_AGENT_", extra="ignore")
 
     model_backend: Literal["openai", "fixture"] = "openai"
+    ingest: Literal["off", "kafka"] = "off"
+    kafka_bootstrap: str = "127.0.0.1:9092"
     model_base_url: str = "http://127.0.0.1:8001/v1"
     model_api_key: str = "local"
     model_name: str = "qwen"

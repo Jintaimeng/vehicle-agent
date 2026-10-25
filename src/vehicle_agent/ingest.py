@@ -159,6 +159,29 @@ def alarm_from_published_event(payload: bytes, topic: MemoryAlarmTopic | None = 
     return inbox.deliver(alarm_event_from_payload(payload))
 
 
+def consume_vehicle_alarms(
+    payloads: list[bytes],
+    judge: Callable[[Alarm], str],
+    topic: MemoryAlarmTopic | None = None,
+    judged: dict[str, str] | None = None,
+) -> str:
+    """Judge each new vehicle.alarm event once. Invalid JSON raises before judge."""
+
+    inbox = MemoryAlarmTopic() if topic is None else topic
+    done = {} if judged is None else judged
+    task_id = ""
+    for payload in payloads:
+        event = alarm_event_from_payload(payload)
+        alarm = inbox.deliver(event)
+        existing = done.get(event.event_id)
+        if existing is not None:
+            task_id = existing
+            continue
+        task_id = judge(alarm)
+        done[event.event_id] = task_id
+    return task_id
+
+
 class DeviceStatusEvent(BaseModel):
     """One device.status payload. It does not update the seeded device table."""
 

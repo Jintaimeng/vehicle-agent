@@ -1,3 +1,4 @@
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
@@ -20,6 +21,7 @@ from vehicle_agent.harness.model import (
 )
 from vehicle_agent.harness.policy import AllowApprovedWritesPolicy
 from vehicle_agent.harness.runtime import Harness
+from vehicle_agent.ingest import MemoryAlarmTopic, alarm_event_from_payload, consume_vehicle_alarms
 from vehicle_agent.knowledge.graph import Neo4jGraphIndex, open_graph_index
 from vehicle_agent.knowledge.index import QdrantRegulationIndex, open_regulation_index
 from vehicle_agent.knowledge.video import open_video_timeline
@@ -86,11 +88,26 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        yield
-        if mcp_session is not None:
-            mcp_session.close()
-        _close_index(index)
-        _close_index(regulations)
+        stop = threading.Event()
+        worker: threading.Thread | None = None
+        if settings.ingest == "kafka":
+            worker = threading.Thread(
+                target=_serve_alarm_ingest,
+                args=(settings.kafka_bootstrap, graph, stop),
+                name="vehicle-alarm-ingest",
+                daemon=True,
+            )
+            worker.start()
+        try:
+            yield
+        finally:
+            stop.set()
+            if worker is not None:
+                worker.join(timeout=2)
+            if mcp_session is not None:
+                mcp_session.close()
+            _close_index(index)
+            _close_index(regulations)
 
     graph = build_graph(
         Harness(settings, model, tools, policy=AllowApprovedWritesPolicy()),
@@ -269,6 +286,57 @@ def main() -> None:
 
 def _config(task_id: str) -> dict:
     return {"configurable": {"thread_id": task_id}}
+
+
+def judge_consumed_alarm(graph, alarm: Alarm, event_id: str) -> str:
+    """Invoke the current graph once. An existing checkpoint for this event is kept."""
+
+    if graph.get_state(_config(event_id)).values:
+        return event_id
+    graph.invoke(_initial_state(event_id, alarm), _config(event_id))
+    return event_id
+
+
+def ingest_alarm_payload(
+    payload: bytes,
+    graph,
+    topic: MemoryAlarmTopic,
+    judged: dict[str, str],
+) -> str:
+    """Parse one vehicle.alarm record and judge it unless that event was already seen."""
+
+    event = alarm_event_from_payload(payload)
+
+    def judge(alarm: Alarm) -> str:
+        return judge_consumed_alarm(graph, alarm, event.event_id)
+
+    return consume_vehicle_alarms([payload], judge, topic, judged)
+
+
+def handle_alarm_payload(
+    payload: bytes,
+    graph,
+    topic: MemoryAlarmTopic,
+    judged: dict[str, str],
+) -> str | None:
+    """Skip a bad record. The caller still commits the offset."""
+
+    try:
+        return ingest_alarm_payload(payload, graph, topic, judged)
+    except ValueError:
+        return None
+
+
+def _serve_alarm_ingest(bootstrap: str, graph, stop: threading.Event) -> None:
+    from vehicle_agent.kafka_alarm import serve_vehicle_alarms
+
+    topic = MemoryAlarmTopic()
+    judged: dict[str, str] = {}
+
+    def handle(payload: bytes) -> None:
+        handle_alarm_payload(payload, graph, topic, judged)
+
+    serve_vehicle_alarms(bootstrap, handle, stop.is_set)
 
 
 def _initial_state(task_id: str, alarm: Alarm) -> dict:

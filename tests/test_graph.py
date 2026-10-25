@@ -56,6 +56,7 @@ def _run(
     video=None,
     observation=None,
     workorders=None,
+    task_id: str | None = None,
     **settings,
 ):
     runtime = _settings(**settings)
@@ -78,9 +79,10 @@ def _run(
         open_checkpointer(tmp_path / "checkpoints.sqlite"),
         observation,
     )
-    config = {"configurable": {"thread_id": alarm.id}}
+    thread_id = alarm.id if task_id is None else task_id
+    config = {"configurable": {"thread_id": thread_id}}
     graph.invoke(
-        {"task_id": alarm.id, "alarm": alarm.model_dump(mode="json"), "errors": []},
+        {"task_id": thread_id, "alarm": alarm.model_dump(mode="json"), "errors": []},
         config,
     )
     return graph, graph.get_state(config).values

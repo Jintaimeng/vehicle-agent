@@ -16,7 +16,7 @@ isProject: false
 
 # 34 lite 容器部署
 
-上一阶段是已完成的报警事件研判，见 [.cursor/plans/33-alarm-event-judgement.plan.md](.cursor/plans/33-alarm-event-judgement.plan.md)。本文件是阶段 34，落地到 [.cursor/plans/34-lite-compose.plan.md](.cursor/plans/34-lite-compose.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段本阶段不创建。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 25.1 节的 lite 档和第 28 节第 12 条「Docker Compose 可以启动演示环境」。`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes、CI 和前端仍不纳入。
+上一阶段是已完成的报警事件研判，见 [.cursor/plans/33-alarm-event-judgement.plan.md](.cursor/plans/33-alarm-event-judgement.plan.md)。本文件是阶段 34，落地到 [.cursor/plans/34-lite-compose.plan.md](.cursor/plans/34-lite-compose.plan.md)。确认本计划后，把正文写入该路径；若 Cursor 计划工具在用户全局 `~/.cursor/plans/` 留下副本，以仓库内文件为准并删除全局副本。下一阶段是 [.cursor/plans/35-kafka-alarm-ingest.plan.md](.cursor/plans/35-kafka-alarm-ingest.plan.md)。延续 [docs/vehicle-risk-agent-implementation-plan.md](docs/vehicle-risk-agent-implementation-plan.md) 第 25.1 节的 lite 档和第 28 节第 12 条「Docker Compose 可以启动演示环境」。`device.status` 触发诊断、`vehicle.location`、`media.ready`、`judgement.requested`、`judgement.completed`、`workorder.created`、手机使用、独立超速类型、驾驶员汇总、企业汇总、路线偏离、Redis、MinIO、StarRocks、Kubernetes、CI 和前端仍不纳入。
 
 本阶段只证明一件事：`docker compose up -d api` 拉起 API 后，不启动 Neo4j、Qdrant、Kafka，也不需要 GPU 或在线模型，就能提交演示脚本里那条高速疲劳报警，并得到与现有规则相同的风险分 `1.0`。图谱、法规、视觉、视频和画面复核保持默认：`memory`、`markdown`、`fixture`。模型只写总结，不改分数。不新增研判工具。工具数仍是十一个。`prompt_version` 仍是 `report-v6`。
 
