@@ -1,6 +1,10 @@
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
 from vehicle_agent.domain.models import Detection
 from vehicle_agent.knowledge.video import VideoFrame, assign_tracks, packaged_video_timeline
-from vehicle_agent.knowledge.vision import YoloVisionIndex
+from vehicle_agent.knowledge.vision import YoloVisionIndex, _write_temp_image
 
 _CLOSED_EYE = (0.4, 0.2, 0.62, 0.55)
 
@@ -56,6 +60,30 @@ def test_fake_yolo_tracks_a_sequence_then_predicts_a_still() -> None:
     assert tracked[0][0].detection.label == "driver"
     assert still[0].label == "driver"
     assert not hasattr(still[0], "track_id")
+
+
+def test_official_yolo_name_is_left_for_ultralytics_to_resolve(monkeypatch) -> None:
+    loaded: list[str] = []
+    model = _FakeModel()
+    monkeypatch.setitem(
+        sys.modules,
+        "ultralytics",
+        SimpleNamespace(YOLO=lambda weights: loaded.append(weights) or model),
+    )
+
+    index = YoloVisionIndex("yolov8n.pt")
+
+    assert index._load() is model
+    assert loaded == ["yolov8n.pt"]
+
+
+def test_yolo_temporary_image_uses_a_supported_extension() -> None:
+    path = Path(_write_temp_image(b"jpeg"))
+    try:
+        assert path.suffix == ".jpg"
+        assert path.read_bytes() == b"jpeg"
+    finally:
+        path.unlink(missing_ok=True)
 
 
 class _Predictor:

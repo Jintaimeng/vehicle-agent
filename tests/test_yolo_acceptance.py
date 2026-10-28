@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-from vehicle_agent.config import Settings
 from vehicle_agent.knowledge.vision import VISION_LABELS, YoloVisionIndex
 
 pytestmark = pytest.mark.skipif(
@@ -11,17 +10,22 @@ pytestmark = pytest.mark.skipif(
     reason="设置 VEHICLE_AGENT_RUN_YOLO=1 后使用本地权重和图片验收 YOLO",
 )
 
+_OFFICIAL_WEIGHTS = "yolov8n.pt"
+
+
+def _live_inputs() -> tuple[str, Path]:
+    configured = os.environ.get("VEHICLE_AGENT_YOLO_WEIGHTS")
+    if configured:
+        assert Path(configured).is_file(), f"YOLO weights not found: {configured}"
+    image = Path(os.environ.get("VEHICLE_AGENT_YOLO_IMAGE", "data/vision-sample.jpg"))
+    assert image.is_file(), f"sample image not found: {image}"
+    return configured or _OFFICIAL_WEIGHTS, image
+
 
 def test_yolo_returns_boxes_inside_allowed_labels() -> None:
-    settings = Settings()
-    weights = Path(settings.yolo_weights)
-    image = Path(os.environ.get("VEHICLE_AGENT_YOLO_IMAGE", "data/vision-sample.jpg"))
-    if not weights.is_file():
-        pytest.skip(f"YOLO weights not found: {weights}")
-    if not image.is_file():
-        pytest.skip(f"sample image not found: {image}")
+    weights, image = _live_inputs()
 
-    index = YoloVisionIndex(str(weights))
+    index = YoloVisionIndex(weights)
     with pytest.raises(ValueError, match="image bytes"):
         index.analyze(image.stem, None)
     detections = index.analyze(image.stem, image.read_bytes())
@@ -33,16 +37,10 @@ def test_yolo_returns_boxes_inside_allowed_labels() -> None:
 
 
 def test_yolo_track_frames_returns_integer_ids() -> None:
-    settings = Settings()
-    weights = Path(settings.yolo_weights)
-    image = Path(os.environ.get("VEHICLE_AGENT_YOLO_IMAGE", "data/vision-sample.jpg"))
-    if not weights.is_file():
-        pytest.skip(f"YOLO weights not found: {weights}")
-    if not image.is_file():
-        pytest.skip(f"sample image not found: {image}")
+    weights, image = _live_inputs()
 
     content = image.read_bytes()
-    tracked = YoloVisionIndex(str(weights)).track_frames([content, content])
+    tracked = YoloVisionIndex(weights).track_frames([content, content])
     ids = [item.track_id for frame in tracked for item in frame if item.track_id is not None]
 
     assert len(tracked) == 2

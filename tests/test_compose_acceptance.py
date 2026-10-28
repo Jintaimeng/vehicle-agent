@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.skipif(
+_COMPOSE_REQUIRED = pytest.mark.skipif(
     os.environ.get("VEHICLE_AGENT_RUN_COMPOSE") != "1",
     reason="设置 VEHICLE_AGENT_RUN_COMPOSE=1 后构建并启动 deployments/docker-compose.yml 中的 api",
 )
@@ -51,6 +51,7 @@ INGEST_WORKORDER_URL = (
 )
 
 
+@_COMPOSE_REQUIRED
 def test_compose_api_scores_demo_alarm() -> None:
     subprocess.run([*COMPOSE, "up", "-d", "--build", "api"], cwd=ROOT, check=True)
     try:
@@ -66,6 +67,7 @@ def test_compose_api_scores_demo_alarm() -> None:
     assert body["workorder_id"] == f"wo-{body['task_id']}"
 
 
+@_COMPOSE_REQUIRED
 def test_compose_ingest_judges_one_alarm_and_keeps_the_workorder() -> None:
     subprocess.run([*INGEST_COMPOSE, "down", "-v"], cwd=ROOT, check=True)
     try:
@@ -98,6 +100,7 @@ def test_compose_ingest_judges_one_alarm_and_keeps_the_workorder() -> None:
     assert restarted_order["status"] == "open"
 
 
+@_COMPOSE_REQUIRED
 @pytest.mark.skipif(
     os.environ.get("VEHICLE_AGENT_RUN_MODEL") != "1",
     reason="设置 VEHICLE_AGENT_RUN_MODEL=1 后连接宿主机上的 OpenAI 兼容接口",
@@ -144,6 +147,11 @@ def _wait_until_healthy() -> None:
     raise AssertionError(f"api health check failed: {last_error}")
 
 
+def _ingested_judgement_ready(body: dict) -> bool:
+    result = body.get("result") or {}
+    return result.get("risk_score") == 0.95
+
+
 def _wait_for_ingested_judgement() -> dict:
     deadline = time.monotonic() + 90
     last_error: Exception | None = None
@@ -159,7 +167,7 @@ def _wait_for_ingested_judgement() -> dict:
         ) as exc:
             last_error = exc
         else:
-            if body.get("result", {}).get("risk_score") == 0.95:
+            if _ingested_judgement_ready(body):
                 return body
             last_error = AssertionError(body)
         time.sleep(1)
@@ -192,3 +200,10 @@ def _post_demo_alarm() -> dict:
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.load(response)
+
+
+def test_ingested_judgement_ready_treats_null_result_as_not_ready() -> None:
+    assert _ingested_judgement_ready({"result": None}) is False
+    assert _ingested_judgement_ready({}) is False
+    assert _ingested_judgement_ready({"result": {"risk_score": 0.9}}) is False
+    assert _ingested_judgement_ready({"result": {"risk_score": 0.95}}) is True

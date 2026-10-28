@@ -131,10 +131,10 @@ class YoloVisionIndex:
             from ultralytics import YOLO
         except ImportError as exc:
             raise RuntimeError("ultralytics is not installed") from exc
-        weights = Path(self._weights)
-        if not weights.is_file():
-            raise FileNotFoundError(f"YOLO weights not found: {weights}")
-        self._model = YOLO(str(weights))
+        # Ultralytics accepts both a local path and an official model name.  The
+        # latter is downloaded into its cache on first use, so checking Path here
+        # would reject the documented ``yolov8n.pt`` acceptance path.
+        self._model = YOLO(self._weights)
         return self._model
 
 
@@ -415,7 +415,9 @@ def _clamp_bbox(xyxy: list[float], width: int, height: int) -> tuple[float, floa
 
 
 def _write_temp_image(content: bytes) -> str:
-    handle = tempfile.NamedTemporaryFile(suffix=".img", delete=False)
+    # Stored image bytes are JPEG. Ultralytics chooses its loader from the
+    # extension and rejects a generic ``.img`` temporary name.
+    handle = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
     try:
         handle.write(content)
     finally:

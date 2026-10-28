@@ -28,11 +28,10 @@ _COCO_LABELS = {"driver", "mobile_phone"}
 def test_official_yolo_and_vlm_keep_the_score(tmp_path: Path) -> None:
     configured = os.environ.get("VEHICLE_AGENT_YOLO_WEIGHTS")
     weights = configured or _OFFICIAL_WEIGHTS
-    if configured and not Path(configured).is_file():
-        pytest.skip(f"YOLO weights not found: {configured}")
+    if configured:
+        assert Path(configured).is_file(), f"YOLO weights not found: {configured}"
     image = Path(os.environ.get("VEHICLE_AGENT_YOLO_IMAGE", "data/vision-sample.jpg"))
-    if not image.is_file():
-        pytest.skip(f"sample image not found: {image}")
+    assert image.is_file(), f"sample image not found: {image}"
 
     store = tmp_path / "vision"
     store_image(store, _IMAGE_ID, image.read_bytes())

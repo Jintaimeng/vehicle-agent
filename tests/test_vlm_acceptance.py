@@ -20,8 +20,7 @@ pytestmark = pytest.mark.skipif(
 def test_live_vlm_labels_enter_comparison() -> None:
     settings = Settings()
     image = Path(os.environ.get("VEHICLE_AGENT_VLM_IMAGE", "data/vision-sample.jpg"))
-    if not image.is_file():
-        pytest.skip(f"sample image not found: {image}")
+    assert image.is_file(), f"sample image not found: {image}"
 
     harness = Harness(
         settings,

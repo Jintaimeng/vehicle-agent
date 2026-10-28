@@ -203,6 +203,21 @@ D:\uv_venv\Scripts\python.exe -m pytest tests/test_mcp_acceptance.py
 
 ## 图片视觉
 
+建议先用统一验收入口。`infrastructure` 会跑默认回归、Docker API/Kafka、Neo4j、Qdrant
+和 MCP；`models` 会先强制检查 Ultralytics、样图、文本模型与视觉模型的 `/models`，
+任何资源缺失都会失败，不会把跳过误认为通过；`all` 顺序执行两层：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\run_live_acceptance.py infrastructure
+.\.venv\Scripts\python.exe scripts\run_live_acceptance.py models
+.\.venv\Scripts\python.exe scripts\run_live_acceptance.py all
+```
+
+真实模型层要求 `VEHICLE_AGENT_YOLO_IMAGE` 和 `VEHICLE_AGENT_VLM_IMAGE` 指向可读图片。
+显式设置 `VEHICLE_AGENT_YOLO_WEIGHTS` 时必须是现有本地文件；不设置时使用
+Ultralytics 官方 `yolov8n.pt`，首次运行会下载。文本模型和 VLM 的 URL、密钥、模型名
+仍分别使用下文列出的环境变量。
+
 默认定样本，不需要权重。需要 YOLO 时安装可选依赖，并准备权重和一张本地图片：
 
 ```powershell
