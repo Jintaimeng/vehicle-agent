@@ -7,3 +7,4 @@ data
 .ruff_cache
 *.sqlite
 *.sqlite3
+deployments/online.env

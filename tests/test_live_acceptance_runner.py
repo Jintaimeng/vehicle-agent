@@ -1,12 +1,26 @@
 import importlib.util
+import io
+import json
 from pathlib import Path
 from urllib.error import URLError
 
-from scripts.run_live_acceptance import model_preflight_errors, without_live_switches
+from scripts.run_live_acceptance import (
+    load_env_file,
+    model_preflight_errors,
+    without_live_switches,
+)
 
 
 class _Response:
     status = 200
+
+    def __init__(self, models=("text-model", "vision-model")) -> None:
+        self._content = io.BytesIO(
+            json.dumps({"data": [{"id": item} for item in models]}).encode()
+        )
+
+    def read(self, size=-1):
+        return self._content.read(size)
 
     def __enter__(self):
         return self
@@ -44,6 +58,8 @@ def test_model_preflight_accepts_official_weights_and_live_endpoints(tmp_path, m
         {
             "VEHICLE_AGENT_YOLO_IMAGE": str(image),
             "VEHICLE_AGENT_VLM_IMAGE": str(image),
+            "VEHICLE_AGENT_MODEL_NAME": "text-model",
+            "VEHICLE_AGENT_VLM_MODEL_NAME": "vision-model",
         },
         root=tmp_path,
     )
@@ -66,6 +82,8 @@ def test_model_preflight_requires_explicit_local_weights(tmp_path, monkeypatch) 
             "VEHICLE_AGENT_YOLO_IMAGE": str(image),
             "VEHICLE_AGENT_VLM_IMAGE": str(image),
             "VEHICLE_AGENT_YOLO_WEIGHTS": str(missing),
+            "VEHICLE_AGENT_MODEL_NAME": "text-model",
+            "VEHICLE_AGENT_VLM_MODEL_NAME": "vision-model",
         },
         root=tmp_path,
     )
@@ -83,3 +101,42 @@ def test_infrastructure_environment_clears_live_switches() -> None:
     )
 
     assert cleaned == {"PATH": "bin"}
+
+
+def test_load_env_file_keeps_urls_and_secret_values(tmp_path) -> None:
+    path = tmp_path / "online.env"
+    path.write_text(
+        "# deployment\nMODEL_URL=https://model.example/v1\nAPI_KEY=secret=value\n",
+        encoding="utf-8",
+    )
+
+    assert load_env_file(path) == {
+        "MODEL_URL": "https://model.example/v1",
+        "API_KEY": "secret=value",
+    }
+
+
+def test_containerized_preflight_does_not_require_host_yolo(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "sample.jpg"
+    image.write_bytes(b"jpeg")
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    monkeypatch.setattr(
+        "scripts.run_live_acceptance.urllib.request.urlopen",
+        lambda *args, **kwargs: _Response(),
+    )
+
+    errors = model_preflight_errors(
+        {
+            "VEHICLE_AGENT_YOLO_IMAGE": str(image),
+            "VEHICLE_AGENT_VLM_IMAGE": str(image),
+            "VEHICLE_AGENT_YOLO_WEIGHTS": "/app/yolov8n.pt",
+            "VEHICLE_AGENT_MODEL_API_KEY": "secret",
+            "VEHICLE_AGENT_VLM_API_KEY": "secret",
+            "VEHICLE_AGENT_MODEL_NAME": "text-model",
+            "VEHICLE_AGENT_VLM_MODEL_NAME": "vision-model",
+        },
+        root=tmp_path,
+        containerized_yolo=True,
+    )
+
+    assert errors == []

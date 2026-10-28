@@ -8,3 +8,4 @@ data/
 *.sqlite
 *.sqlite3
 *.pt
+deployments/online.env

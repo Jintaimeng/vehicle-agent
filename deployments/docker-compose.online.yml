@@ -1,0 +1,23 @@
+# 完整在线部署覆盖层。所有应用运行参数从同目录 online.env 读取。
+# 文本模型和视觉大模型使用远程 OpenAI 兼容 API；容器内只运行轻量 YOLO。
+services:
+  api:
+    build:
+      args:
+        VEHICLE_AGENT_INSTALL_VISION: "1"
+    env_file:
+      - ./online.env
+    depends_on:
+      - kafka
+      - neo4j
+      - qdrant
+    restart: unless-stopped
+
+  kafka:
+    restart: unless-stopped
+
+  neo4j:
+    restart: unless-stopped
+
+  qdrant:
+    restart: unless-stopped

@@ -73,6 +73,45 @@ docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.i
 docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.ingest.yml -f deployments/docker-compose.model.yml up -d kafka api
 ```
 
+### 完整在线容器
+
+完整在线部署使用远程 OpenAI 兼容 API，不在本机下载文本模型或视觉大模型。API 容器内安装
+Ultralytics，并在镜像构建阶段缓存轻量 `yolov8n.pt`，因此图片上传和研判都在容器内执行
+真实 YOLO。全部运行参数集中在一份不提交 Git 的配置文件：
+
+```powershell
+Copy-Item deployments\online.env.example deployments\online.env
+```
+
+编辑 `deployments/online.env`，至少替换 API 访问令牌和下面六项模型配置：
+
+```dotenv
+VEHICLE_AGENT_API_TOKEN=<自定义高强度随机值>
+VEHICLE_AGENT_MODEL_BASE_URL=https://api.openai.com/v1
+VEHICLE_AGENT_MODEL_API_KEY=<真实密钥>
+VEHICLE_AGENT_MODEL_NAME=gpt-4.1-mini
+VEHICLE_AGENT_VLM_BASE_URL=https://api.openai.com/v1
+VEHICLE_AGENT_VLM_API_KEY=<真实密钥>
+VEHICLE_AGENT_VLM_MODEL_NAME=gpt-4.1-mini
+```
+
+兼容服务必须提供 `GET /models`、`POST /chat/completions`、JSON object 输出和
+`image_url` 图像输入。模型名必须与 `/models` 返回的 `id` 完全一致。启动完整服务：
+
+```powershell
+docker compose --env-file deployments/online.env `
+  -f deployments/docker-compose.yml `
+  -f deployments/docker-compose.online.yml `
+  up -d --build
+```
+
+真实验收会先检查配置、密钥、模型名和样图，再构建完整服务，并通过容器 API 验证
+YOLO 检测、VLM 复核、远程报告、人工复核分支和研判结果：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\run_live_acceptance.py models
+```
+
 推送和拉取请求会在 runner 的临时环境里安装 `.[dev]`，然后执行 `uv run ruff check src tests scripts` 和 `uv run pytest`。通过后用 `deployments/Dockerfile` 构建 `vehicle-agent:ci`，并确认镜像里没有 `ultralytics`、`VEHICLE_AGENT_MODEL_BACKEND` 是 `fixture`。镜像不推送。不设置实机验收开关，因此不连接 Kafka、Compose、Neo4j、Qdrant 或在线模型。
 
 本阶段不包含驾驶员汇总、企业汇总、路线偏离、`vehicle.location`、`media.ready`、`judgement.requested`、`workorder.created`、Kubernetes 和前端。

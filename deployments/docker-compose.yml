@@ -10,7 +10,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      NEO4J_AUTH: neo4j/vehicle-agent-local
+      NEO4J_AUTH: ${NEO4J_AUTH:-neo4j/vehicle-agent-local}
 
   qdrant:
     image: qdrant/qdrant:v1.19.2
@@ -44,10 +44,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      VEHICLE_AGENT_MODEL_BACKEND: fixture
       VEHICLE_AGENT_HOST: 0.0.0.0
       VEHICLE_AGENT_CHECKPOINT_PATH: /data/checkpoints.sqlite
-      VEHICLE_AGENT_API_TOKEN: ${VEHICLE_AGENT_API_TOKEN:-}
     volumes:
       - api-data:/data
     healthcheck:
