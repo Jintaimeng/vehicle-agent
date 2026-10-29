@@ -140,3 +140,27 @@ def test_containerized_preflight_does_not_require_host_yolo(tmp_path, monkeypatc
     )
 
     assert errors == []
+
+
+def test_model_preflight_accepts_gemini_models_prefix(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "sample.jpg"
+    image.write_bytes(b"jpeg")
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(
+        "scripts.run_live_acceptance.urllib.request.urlopen",
+        lambda *args, **kwargs: _Response(("models/gemini-2.5-flash",)),
+    )
+
+    errors = model_preflight_errors(
+        {
+            "VEHICLE_AGENT_YOLO_IMAGE": str(image),
+            "VEHICLE_AGENT_VLM_IMAGE": str(image),
+            "VEHICLE_AGENT_MODEL_API_KEY": "secret",
+            "VEHICLE_AGENT_VLM_API_KEY": "secret",
+            "VEHICLE_AGENT_MODEL_NAME": "gemini-2.5-flash",
+            "VEHICLE_AGENT_VLM_MODEL_NAME": "gemini-2.5-flash",
+        },
+        root=tmp_path,
+    )
+
+    assert errors == []

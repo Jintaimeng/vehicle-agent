@@ -98,7 +98,10 @@ def model_preflight_errors(
                     errors.append(f"{label} /models 返回 HTTP {response.status}: {endpoint}")
                     continue
                 payload = json.load(response)
-                available = {item.get("id") for item in payload.get("data", [])}
+                available = {
+                    item.get("id", "").removeprefix("models/")
+                    for item in payload.get("data", [])
+                }
                 selected = env.get(model_variable, "")
                 if not selected:
                     errors.append(f"{label}模型名未配置: {model_variable}")
