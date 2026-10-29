@@ -158,6 +158,42 @@ def test_model_budget_is_enforced_before_the_call() -> None:
     assert harness.tracer.events[-1].error_code == "budget_exceeded"
 
 
+def test_budgets_are_isolated_between_tasks_but_not_reset_for_same_task() -> None:
+    harness = _harness(
+        FakeModelAdapter(),
+        settings=_settings(max_tool_calls=1, max_model_calls=1, max_tokens=20),
+    )
+    for task_id in ("first", "second"):
+        harness.call_tool(
+            "get_vehicle_context",
+            {"vehicle_id": "vehicle_001", "driver_id": "driver_001"},
+            task_id=task_id,
+            node="context",
+        )
+        harness.complete_structured([], ReportDraft, task_id=task_id, node="report")
+    with pytest.raises(BudgetExceededError):
+        harness.complete_structured([], ReportDraft, task_id="first", node="report")
+    with pytest.raises(BudgetExceededError):
+        harness.call_tool(
+            "get_vehicle_context",
+            {"vehicle_id": "vehicle_001", "driver_id": "driver_001"},
+            task_id="second",
+            node="context",
+        )
+
+
+def test_budget_clock_starts_on_first_task_not_service_start(monkeypatch) -> None:
+    clock = [0.0]
+    monkeypatch.setattr("vehicle_agent.harness.runtime.time.monotonic", lambda: clock[0])
+    harness = _harness(FakeModelAdapter(), settings=_settings(max_elapsed_seconds=10))
+    clock[0] = 100.0
+    harness.complete_structured([], ReportDraft, task_id="first", node="report")
+    clock[0] = 111.0
+    with pytest.raises(BudgetExceededError):
+        harness.complete_structured([], ReportDraft, task_id="first", node="report")
+    harness.complete_structured([], ReportDraft, task_id="second", node="report")
+
+
 def test_tool_timeout_is_classified() -> None:
     class InputModel(BaseModel):
         value: str

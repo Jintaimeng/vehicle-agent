@@ -3,6 +3,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
+from threading import Lock
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -70,8 +71,22 @@ class Harness:
         self.tracer = tracer or TraceRecorder()
         self.policy = policy or AllowReadOnlyPolicy()
         self.budget = budget or ExecutionBudget(settings)
+        self._custom_budget = budget is not None
+        self._task_budgets: dict[str, ExecutionBudget] = {}
+        self._budget_lock = Lock()
+
+    def _budget_for(self, task_id: str) -> ExecutionBudget:
+        with self._budget_lock:
+            if task_id not in self._task_budgets:
+                if not self._task_budgets and not self._custom_budget:
+                    self.budget.started = time.monotonic()
+                self._task_budgets[task_id] = (
+                    self.budget if not self._task_budgets else ExecutionBudget(self.settings)
+                )
+            return self._task_budgets[task_id]
 
     def call_tool(self, name: str, arguments: dict, *, task_id: str, node: str) -> BaseModel:
+        budget = self._budget_for(task_id)
         tool = self.tools.get(name)
         try:
             payload = tool.input_model.model_validate(arguments)
@@ -81,8 +96,8 @@ class Harness:
         self.policy.allow(tool, payload)
 
         def operation() -> BaseModel:
-            self.budget.ensure_tool_call()
-            self.budget.tool_calls += 1
+            budget.ensure_tool_call()
+            budget.tool_calls += 1
             started = time.perf_counter()
             try:
                 result = _run_with_timeout(
@@ -123,10 +138,11 @@ class Harness:
         note_from: Callable[[OutputT], str] | None = None,
     ) -> OutputT:
         used_model = model_name or self.settings.model_name
+        budget = self._budget_for(task_id)
 
         def operation() -> OutputT:
-            self.budget.ensure_model_call()
-            self.budget.model_calls += 1
+            budget.ensure_model_call()
+            budget.model_calls += 1
             started = time.perf_counter()
             response = self.model.complete(
                 messages,
@@ -134,8 +150,8 @@ class Harness:
                 timeout=self.settings.request_timeout_seconds,
                 endpoint=endpoint,
             )
-            self.budget.tokens += response.total_tokens
-            if self.budget.tokens > self.budget.max_tokens:
+            budget.tokens += response.total_tokens
+            if budget.tokens > budget.max_tokens:
                 raise BudgetExceededError("token budget exhausted")
             try:
                 parsed = schema.model_validate(_parse_json_object(response.content))

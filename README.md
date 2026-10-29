@@ -96,7 +96,12 @@ VEHICLE_AGENT_VLM_MODEL_NAME=gpt-4.1-mini
 ```
 
 兼容服务必须提供 `GET /models`、`POST /chat/completions`、JSON object 输出和
-`image_url` 图像输入。模型名必须与 `/models` 返回的 `id` 完全一致。启动完整服务：
+`image_url` 图像输入。Gemini 返回的模型 ID 可带 `models/` 前缀，配置中不带此前缀。
+使用 Gemini Key 时，两个 BASE_URL 均设为
+`https://generativelanguage.googleapis.com/v1beta/openai`，两个模型名可设为
+`gemini-3.5-flash-lite`。模型列表可见不代表对话可用，必须以真实文本和图像请求为准；
+本次验证中 `gemini-3.8-flash` 出现超时和 HTTP 503，旧 `gemini-2.5-flash` 返回 404。
+密钥仅保存在被忽略的 `online.env`，不要放进报告或 Git。启动完整服务：
 
 ```powershell
 docker compose --env-file deployments/online.env `
@@ -106,7 +111,9 @@ docker compose --env-file deployments/online.env `
 ```
 
 真实验收会先检查配置、密钥、模型名和样图，再构建完整服务，并通过容器 API 验证
-YOLO 检测、VLM 复核、远程报告、人工复核分支和研判结果：
+YOLO 检测、VLM 复核、远程报告和同一研判对应的可读取工单；出现降级或转人工不会算作
+自动链路通过。`driver` 是 YOLO `person` 的统一类别映射，不代表识别了驾驶员身份。
+当前公交车/行人样图仅用于技术连通性测试，不能验证闭眼、打哈欠或疲劳驾驶识别准确率：
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\run_live_acceptance.py models

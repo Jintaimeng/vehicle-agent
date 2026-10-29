@@ -365,6 +365,8 @@ def _vlm_messages(image_id: str, content: bytes) -> list[dict]:
                 "输出 JSON 对象，字段为 labels。"
                 "类别只能是 driver、mobile_phone、seat_belt、closed_eye、"
                 "yawn、smoking、camera_occlusion。"
+                "其中 driver 是检测类别 person（可见人物）的统一映射，"
+                "不表示已确认其驾驶员身份；画面中可见人物时应包含 driver。"
                 "不要推测身份，不要输出检测框或风险分。"
             ),
         },

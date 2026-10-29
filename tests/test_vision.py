@@ -15,8 +15,17 @@ from vehicle_agent.harness.runtime import Harness
 from vehicle_agent.harness.tools import build_vehicle_tools
 from vehicle_agent.knowledge.graph import graph_fact
 from vehicle_agent.knowledge.index import RegulationSnippet
-from vehicle_agent.knowledge.vision import store_image
+from vehicle_agent.knowledge.vision import _vlm_messages, map_vision_label, store_image
 from vehicle_agent.repositories.memory import build_seed_repository
+
+
+def test_vlm_prompt_matches_yolo_person_mapping_without_claiming_identity() -> None:
+    assert map_vision_label("person") == "driver"
+    messages = _vlm_messages("sample.jpg", b"jpeg")
+    prompt = messages[0]["content"]
+    assert "person（可见人物）的统一映射" in prompt
+    assert "不表示已确认其驾驶员身份" in prompt
+    assert "不要推测身份" in prompt
 
 
 def _vision_model(fact: str):

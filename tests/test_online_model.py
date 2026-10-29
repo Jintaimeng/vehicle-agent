@@ -96,6 +96,7 @@ def test_openai_backend_keeps_scores_and_uses_the_completion(tmp_path) -> None:
         assert request.url.path.endswith("/chat/completions")
         payload = json.loads(request.content)
         assert payload["response_format"] == {"type": "json_object"}
+        assert "recommendations 必须是字符串数组" in payload["messages"][0]["content"]
 
 
 def _app(settings: Settings, checkpoint, model: OpenAICompatibleModel):

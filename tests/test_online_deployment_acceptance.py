@@ -56,19 +56,26 @@ def test_online_container_runs_yolo_vlm_report_and_workflow() -> None:
     )
     judged.raise_for_status()
     body = judged.json()
-    if body["status"] == "awaiting_review":
-        reviewed = httpx.post(
-            f"{BASE_URL}/api/v1/judgements/{body['task_id']}/review",
-            headers=headers,
-            json={"reviewer": "online-acceptance", "decision": "confirm", "comment": "实模验收"},
-            timeout=360,
-        )
-        reviewed.raise_for_status()
-        body = reviewed.json()
-
-    assert body["status"] == "completed"
+    assert body["status"] == "completed", body
+    assert body["errors"] == [], body
     assert body["result"]["risk_score"] == 1.0
     assert body["result"]["summary"] != json.loads(FIXTURE_REPORT)["summary"]
+    vision = [item for item in body["result"]["evidence"] if item["type"] == "vision"]
+    assert vision
+    assert all(item["source"] == "yolov8n.pt" for item in vision)
+    assert all("可见事实：画面观察支持" in item["description"] for item in vision)
+    assert body["workorder_id"], body
+    order = httpx.get(
+        f"{BASE_URL}/api/v1/workorders/{body['workorder_id']}",
+        headers=headers,
+        timeout=30,
+    )
+    order.raise_for_status()
+    assert order.json()["status"] == "open"
+    assert order.json()["task_id"] == body["task_id"]
+    assert order.json()["summary"] == body["result"]["summary"]
+    print(json.dumps({"task_id": body["task_id"], "workorder_id": body["workorder_id"],
+                      "vision": vision, "summary": body["result"]["summary"]}, ensure_ascii=False))
 
 
 def test_online_container_uses_remote_report_and_creates_workorder() -> None:

@@ -21,6 +21,23 @@ REPORT = json.dumps(
 )
 
 
+def test_consecutive_judgements_each_get_their_own_budget_and_workorder(tmp_path) -> None:
+    with _client(tmp_path, max_tool_calls=6, max_model_calls=1) as client:
+        for index in range(3):
+            response = client.post(
+                "/api/v1/judgements",
+                json=_alarm(id=f"budget_{index}", vehicle_id="vehicle_001",
+                            driver_id="driver_001", device_id="device_001",
+                            speed_kmh=85, raw_confidence=0.9),
+            )
+            body = response.json()
+            assert body["status"] == "completed", body
+            assert body["errors"] == []
+            assert body["workorder_id"]
+            order = client.get(f"/api/v1/workorders/{body['workorder_id']}")
+            assert order.json()["task_id"] == body["task_id"]
+
+
 def _client(tmp_path, *, content: str = REPORT, **settings):
     checkpoint = tmp_path / "checkpoints.sqlite"
     config = Settings(max_retries=1, checkpoint_path=str(checkpoint), **settings)

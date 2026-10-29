@@ -258,6 +258,8 @@ def make_nodes(
                 "content": (
                     "你是车辆监控研判助手。只根据给定证据编写 summary 和 recommendations。"
                     "输出 JSON 对象，字段为 summary 和 recommendations。"
+                    '严格遵守结构：{"summary":"文字总结","recommendations":["建议一","建议二"]}。'
+                    "summary 必须是字符串，recommendations 必须是字符串数组，不能是单个字符串。"
                     "不要编造未提供的证据。没有 document 证据时，不要引用法规条款。"
                     "没有 graph 证据时，不要编造车辆、驾驶员、设备或故障关系。"
                     "没有 vision 证据时，不要编造检测框或画面事实。"
