@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 _WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "check.yml"
@@ -13,6 +15,29 @@ _LIVE_SWITCHES = (
     "VEHICLE_AGENT_RUN_MCP",
     "VEHICLE_AGENT_RUN_ONLINE",
 )
+
+
+def test_pytest_console_entrypoint_collects_script_tests_outside_project_root(tmp_path) -> None:
+    root = _WORKFLOW.parents[2]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import pytest; raise SystemExit(pytest.main())",
+            "--collect-only",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            str(root / "tests" / "test_live_acceptance_runner.py"),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "test_model_preflight_reports_all_missing_inputs" in result.stdout
 
 
 def test_check_workflow_runs_the_default_commands_only() -> None:
